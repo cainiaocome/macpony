@@ -28,7 +28,7 @@ from hammerspoon_macapi import (
 
 pytestmark = [
     pytest.mark.hammerspoon,
-    pytest.mark.asyncio,
+    pytest.mark.asyncio(loop_scope="module"),
     pytest.mark.skipif(
         sys.platform != "darwin" or os.getenv("RUN_HAMMERSPOON_INTEGRATION") != "1",
         reason="requires macOS, Hammerspoon, and RUN_HAMMERSPOON_INTEGRATION=1",
