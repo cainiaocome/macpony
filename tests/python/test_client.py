@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import asyncio
+import shutil
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -18,13 +20,15 @@ from .fake_server import FakeMacAPIServer
 
 
 @pytest_asyncio.fixture
-async def fake_server(tmp_path: Path):
-    server = FakeMacAPIServer(tmp_path / "macapi.sock")
+async def fake_server():
+    runtime_dir = Path(tempfile.mkdtemp(prefix="mapi-"))
+    server = FakeMacAPIServer(runtime_dir / "macapi.sock")
     await server.start()
     try:
         yield server
     finally:
         await server.close()
+        shutil.rmtree(runtime_dir)
 
 
 async def connected_client(server: FakeMacAPIServer) -> MacAPI:
