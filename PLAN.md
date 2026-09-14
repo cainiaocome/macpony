@@ -21,7 +21,7 @@ Implement the Unix-domain-socket NDJSON protocol, Hammerspoon server, typed asyn
 ## In progress
 
 - Final acceptance review and macOS-only runtime validation through GitHub Actions.
-- The hosted Hammerspoon job creates the real socket and accepts the Python connection, but the `system.capabilities` response currently times out. The server now re-arms reads until a client is present and the next run includes listener-state and unified-log diagnostics.
+- The hosted Hammerspoon job creates the real socket and accepts the Python connection, but the `system.capabilities` response currently times out. The server now resets its pending-read state on connection-count transitions and only arms reads with one active client; the next run includes listener-state and unified-log diagnostics.
 
 ## Remaining
 

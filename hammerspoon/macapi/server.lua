@@ -57,6 +57,7 @@ end
 
 local function read_next()
     if not listener or read_pending then return end
+    if listener:connections() ~= 1 then return end
     read_pending = true
     local ok, result = pcall(function() return listener:read("\n", TAG_LINE) end)
     if not ok or not result then read_pending = false end
