@@ -28,6 +28,7 @@ class FakeMacAPIServer:
         self.path = path
         self._server: asyncio.AbstractServer | None = None
         self._writer: asyncio.StreamWriter | None = None
+        self._writers: set[asyncio.StreamWriter] = set()
         self._reader_tasks: set[asyncio.Task[None]] = set()
         self._requests: asyncio.Queue[dict[str, object]] = asyncio.Queue()
         self._write_lock = asyncio.Lock()
@@ -38,26 +39,31 @@ class FakeMacAPIServer:
         )
 
     async def close(self) -> None:
-        if self._server is not None:
-            self._server.close()
-            await self._server.wait_closed()
-            self._server = None
-        writer = self._writer
+        server = self._server
+        self._server = None
+        if server is not None:
+            server.close()
+        writers = list(self._writers)
+        self._writers.clear()
         self._writer = None
-        if writer is not None:
+        for writer in writers:
             writer.close()
-            await writer.wait_closed()
+            with contextlib.suppress(OSError, asyncio.CancelledError):
+                await writer.wait_closed()
         tasks = list(self._reader_tasks)
         for task in tasks:
             task.cancel()
         for task in tasks:
             with contextlib.suppress(asyncio.CancelledError):
                 await task
+        if server is not None:
+            await server.wait_closed()
 
     async def _accept(
         self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
     ) -> None:
         self._writer = writer
+        self._writers.add(writer)
         task = asyncio.create_task(self._consume(reader, writer))
         self._reader_tasks.add(task)
         task.add_done_callback(self._reader_tasks.discard)
@@ -82,6 +88,10 @@ class FakeMacAPIServer:
         finally:
             if self._writer is writer:
                 self._writer = None
+            self._writers.discard(writer)
+            writer.close()
+            with contextlib.suppress(OSError, asyncio.CancelledError):
+                await writer.wait_closed()
 
     async def wait_for_method(
         self, method: str, timeout: float = 2.0

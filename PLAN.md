@@ -10,6 +10,7 @@ Implement the Unix-domain-socket NDJSON protocol, Hammerspoon server, typed asyn
 - Added a version-1 NDJSON protocol contract, shared JSON fixtures, and typed Pydantic models.
 - Implemented the async Python SDK with a single reader task, serialized writes, request correlation, timeouts, typed errors, bounded events, and reconnect/subscription restoration.
 - Added both async-iterator and typed async callback event consumption APIs.
+- Hardened the fake Unix-socket test server teardown for Python 3.12 by closing every accepted writer before awaiting listener shutdown.
 - Added a fake Unix-socket server and tests for concurrent out-of-order RPCs, event interleaving, disconnects, timeouts, unknown events, screenshot decoding, and reconnect restoration.
 - Implemented the Hammerspoon Unix socket server, explicit dispatcher, system/app/window/screen/audio/clipboard/network/input services, subscriptions, bounded/coalesced event bus, and watchers.
 - Added package metadata, README, Makefile, and GitHub Actions Python/Linux/macOS plus Lua-check jobs.
@@ -21,11 +22,11 @@ Implement the Unix-domain-socket NDJSON protocol, Hammerspoon server, typed asyn
 ## In progress
 
 - Final acceptance review and macOS-only runtime validation through GitHub Actions.
-- The hosted Hammerspoon job now accepts and reads the Python request, but an Hammerspoon JSON decode call was receiving the `gsub` substitution count as a second argument. The protocol decoder is fixed; the next run is the final runtime confirmation.
+- The hosted Hammerspoon job now accepts, decodes, and round-trips the Python request. The remaining hosted matrix rerun is needed after the Python 3.12 fixture teardown fix.
 
 ## Remaining
 
-- Observe the next GitHub macOS Hammerspoon job and confirm the RPC round trip after the JSON decoder fix.
+- Observe the next GitHub workflow and confirm Python 3.12/Lua macOS jobs complete after the fixture teardown fix.
 - After the smoke test passes, perform final diff/status review and simplify this handoff.
 
 ## Constraints and decisions
@@ -41,5 +42,5 @@ Implement the Unix-domain-socket NDJSON protocol, Hammerspoon server, typed asyn
 - `python -m build python-client`: passed.
 - `luaparser` parsed all 21 Lua files; native `luac`/Hammerspoon runtime validation is deferred to macOS CI.
 - `pytest -q`: passed (14 tests, 1 opt-in integration test skipped on Linux).
-- GitHub workflow YAML parses locally; the native macOS/Hammerspoon job has run through the decode diagnosis and the final cleanup is pending hosted confirmation.
-- Remote verification: commits through `e1a97a6` are pushed to `origin/master`; run `34851111761` confirmed 97 Python request bytes were read and identified the Hammerspoon JSON argument error. Python 3.13 Ubuntu/macOS jobs and Lua syntax checks continue to pass.
+- GitHub workflow YAML parses locally; the native macOS/Hammerspoon job passed in run `34851948986` before the run was canceled for stalled Python 3.12 teardown jobs.
+- Remote verification: commits through `52ddd02` are pushed to `origin/master`; Python 3.12 tests now pass locally (14 tests in 0.22s) after the fake-server cleanup fix. Python 3.13 Ubuntu/macOS jobs and Lua syntax checks passed in the hosted run.
