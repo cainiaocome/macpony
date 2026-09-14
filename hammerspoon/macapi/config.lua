@@ -19,6 +19,10 @@ M.max_line_bytes = 16 * 1024 * 1024
 M.max_inline_screenshot_bytes = M.max_line_bytes - 4096
 M.max_queue_size = 256
 M.event_coalesce_ms = 75
-M.dangerous_actions_enabled = os.getenv("MACAPI_ENABLE_DANGEROUS_ACTIONS") == "1"
+-- The full API is enabled by default. Set MACAPI_ENABLE_DANGEROUS_ACTIONS=0
+-- for a restricted deployment that disables input, lock, screensaver, and app
+-- quit operations.
+local dangerous_actions_env = os.getenv("MACAPI_ENABLE_DANGEROUS_ACTIONS")
+M.dangerous_actions_enabled = dangerous_actions_env ~= "0"
 
 return M

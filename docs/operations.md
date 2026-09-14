@@ -6,7 +6,7 @@
 | --- | --- | --- |
 | `MACAPI_RUNTIME_DIR` | `~/Library/Application Support/HammerspoonMacAPI` | Root for the runtime and socket. |
 | `MACAPI_SOCKET_PATH` | `$MACAPI_RUNTIME_DIR/run/macapi.sock` | Override the exact socket path. |
-| `MACAPI_ENABLE_DANGEROUS_ACTIONS` | unset/disabled | Enables input, lock, screensaver, and app quit methods when set to `1`. |
+| `MACAPI_ENABLE_DANGEROUS_ACTIONS` | enabled | Set to `0` to disable input, lock, screensaver, and app quit methods. |
 
 The Lua configuration reads these values when `macapi.config` is loaded. A
 Hammerspoon reload is required after changing them.
@@ -18,7 +18,7 @@ that can access it as the current user is trusted. macOS may still require
 Accessibility, Screen Recording, or other user approvals for particular
 Hammerspoon APIs.
 
-Keep `MACAPI_ENABLE_DANGEROUS_ACTIONS` unset in unattended or shared desktop
+Set `MACAPI_ENABLE_DANGEROUS_ACTIONS=0` in unattended or shared desktop
 environments. The setting is not an authentication mechanism.
 
 ## Start, stop, and reload
@@ -55,7 +55,13 @@ RUN_HAMMERSPOON_INTEGRATION=1 pytest -q tests/integration -m hammerspoon
 ```
 
 The GitHub workflow runs Python 3.12 and 3.13 on Ubuntu and macOS, Lua checks,
-and the Hammerspoon smoke test on macOS.
+and a real Hammerspoon end-to-end suite on macOS. The suite starts Hammerspoon,
+connects through the actual Unix socket, checks the complete capability
+catalog, exercises read-only namespaces and reversible controls, validates
+typed errors and subscriptions, captures screenshots, triggers a clipboard
+watcher event, and verifies client shutdown behavior. It leaves irreversible
+screen-lock, screensaver, app-quit, and input-injection actions out of the
+always-on job.
 
 ## Troubleshooting
 

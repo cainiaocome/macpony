@@ -51,8 +51,9 @@ jobs:
         run: pytest tests/python
 
   hammerspoon:
-    name: Hammerspoon socket smoke test
+    name: Hammerspoon macOS end-to-end
     runs-on: macos-14
+    timeout-minutes: 20
     permissions:
       contents: read
     steps:
@@ -71,6 +72,7 @@ jobs:
           cp -R hammerspoon/macapi "$HOME/.hammerspoon/macapi"
       - name: Launch Hammerspoon
         run: |
+          unset MACAPI_ENABLE_DANGEROUS_ACTIONS
           nohup /Applications/Hammerspoon.app/Contents/MacOS/Hammerspoon \
             >/tmp/hammerspoon-open.log 2>&1 </dev/null &
           socket_path="$HOME/Library/Application Support/HammerspoonMacAPI/run/macapi.sock"
@@ -82,10 +84,10 @@ jobs:
           cat /tmp/hammerspoon-open.log 2>/dev/null || true
           find "$HOME/Library/Logs" -maxdepth 3 -type f -iname '*hammerspoon*' -print -exec tail -100 {} \; 2>/dev/null || true
           exit 1
-      - name: Real Hammerspoon integration test
+      - name: Real Hammerspoon end-to-end test suite
         env:
           RUN_HAMMERSPOON_INTEGRATION: '1'
-        run: pytest -q tests/integration -m hammerspoon
+        run: pytest -vv tests/integration -m hammerspoon
       - name: Hammerspoon logs
         if: failure()
         run: |

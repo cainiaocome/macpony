@@ -91,7 +91,10 @@ loosening this invariant inside the Lua server.
 The server listens only on a Unix-domain socket. There is no TCP port, API key,
 or authentication handshake. Any same-user process that can open the socket is
 trusted. Runtime and socket permissions reduce accidental access, while the
-dangerous-action flag provides an additional default-off safety control.
+dangerous-action flag provides an explicit restricted-deployment control. The
+complete feature set is enabled by default; setting
+`MACAPI_ENABLE_DANGEROUS_ACTIONS=0` disables input, lock, screensaver, and app
+quit operations.
 
 The API deliberately has no arbitrary Lua evaluation, shell execution, or
 filesystem browsing method.

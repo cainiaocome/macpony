@@ -1,7 +1,7 @@
 --- Dangerous keyboard and mouse injection RPC service.
 ---
---- Every method checks `MACAPI_ENABLE_DANGEROUS_ACTIONS` before touching the
---- event tap or mouse. Parameter validation happens after the safety gate.
+--- Every method checks the configurable feature flag before touching the event
+--- tap or mouse. Parameter validation happens after the feature gate.
 local eventtap = require("hs.eventtap")
 local mouse = require("hs.mouse")
 local validators = require("macapi.validators")

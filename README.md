@@ -29,10 +29,10 @@ The server listens only on:
 
 The runtime directory is mode `0700` and the socket is mode `0600`. Version 1
 allows one client and has no application-level authentication because filesystem
-permissions are the trust boundary. Locking the screen, starting the
-screensaver, quitting apps, and keyboard/mouse injection are disabled by
-default; explicitly set
-`MACAPI_ENABLE_DANGEROUS_ACTIONS=1` in Hammerspoon's environment to enable them.
+permissions are the trust boundary. The complete feature set, including screen
+locking, screensaver control, app quitting, and keyboard/mouse injection, is
+enabled by default. Set `MACAPI_ENABLE_DANGEROUS_ACTIONS=0` in Hammerspoon's
+environment for a restricted deployment.
 
 NDJSON records are bounded at 16 MiB. Inline PNG screenshots have the same
 bounded transport and return `SCREENSHOT_TOO_LARGE` when the encoded image does

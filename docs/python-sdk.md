@@ -63,7 +63,8 @@ All SDK exceptions derive from `MacAPIError`:
 Known RPC codes map to subclasses such as `FeatureDisabledError`,
 `MethodNotFoundError`, `InvalidParamsError`, `AppNotFoundError`,
 `WindowNotFoundError`, `ScreenNotFoundError`, and
-`PermissionRequiredError`.
+`PermissionRequiredError`. The complete feature set is enabled by default;
+restricted deployments report `FeatureDisabledError` for disabled controls.
 
 ## Reconnect behavior
 

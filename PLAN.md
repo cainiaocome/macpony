@@ -14,7 +14,7 @@ Implement the Unix-domain-socket NDJSON protocol, Hammerspoon server, typed asyn
 - Added a fake Unix-socket server and tests for concurrent out-of-order RPCs, event interleaving, disconnects, timeouts, unknown events, screenshot decoding, and reconnect restoration.
 - Implemented the Hammerspoon Unix socket server, explicit dispatcher, system/app/window/screen/audio/clipboard/network/input services, subscriptions, bounded/coalesced event bus, and watchers.
 - Added package metadata, README, Makefile, and GitHub Actions Python/Linux/macOS plus Lua-check jobs.
-- Added a marked, opt-in Hammerspoon round-trip integration test and a default-off dangerous-action configuration flag.
+- Added a marked, opt-in Hammerspoon integration suite and an explicitly configurable feature-restriction flag.
 - Added a macOS workflow job that installs and launches Hammerspoon, waits for the real socket, and runs the opt-in smoke test.
 - Audited the wire contract against the Hammerspoon reference and fixed window event field names and void subscription responses.
 - Implemented screen topology connect/disconnect events, power-source change events, and typed Python models for the emitted Wi-Fi/audio/power events.
@@ -23,14 +23,16 @@ Implement the Unix-domain-socket NDJSON protocol, Hammerspoon server, typed asyn
 - Updated the README and design document for bounded records, screenshot fallback, event queue policy, iterator shutdown, and the expanded audio event catalog.
 - Added root documentation instructions in `AGENTS.md`, a documentation index, getting-started guide, architecture guide, protocol reference, RPC API reference, event guide, Python SDK guide, and operations/troubleshooting guide.
 - Added LuaDoc comments across the Hammerspoon server/services and docstrings across the public Python client, namespaces, transport, models, protocol, and exception types.
+- Changed the feature policy to enable the complete API by default, with `MACAPI_ENABLE_DANGEROUS_ACTIONS=0` as the explicit restricted-deployment setting.
+- Expanded the macOS Hammerspoon workflow from a two-call smoke test to a real end-to-end suite covering the capability catalog, namespaces, screenshots, reversible controls, typed errors, subscriptions, clipboard events, and client lifecycle.
 
 ## In progress
 
-- Documentation changes are implemented and locally validated.
+- Feature-policy and macOS end-to-end coverage changes are implemented and locally validated.
 
 ## Remaining
 
-- Native `luac` and Hammerspoon runtime validation remains deferred to a macOS environment or hosted CI.
+- Native `luac` and Hammerspoon runtime validation remains deferred to the hosted macOS workflow.
 
 ## Constraints and decisions
 
@@ -46,5 +48,7 @@ Implement the Unix-domain-socket NDJSON protocol, Hammerspoon server, typed asyn
 - `luaparser` parsed all Lua modules, integration Lua, and Lua behavior tests; native `luac`/Hammerspoon runtime validation is deferred to macOS CI.
 - `pytest tests/python`: passed (23 tests).
 - Documentation and source-comment changes do not alter runtime behavior; no generated documentation artifacts are required.
+- The expanded Hammerspoon integration suite requires macOS, Hammerspoon, a GUI session, and `RUN_HAMMERSPOON_INTEGRATION=1`.
+- Local Linux result: `pytest tests/integration` skips all 7 Hammerspoon tests as expected; the hosted macOS job runs them against the real socket.
 - GitHub workflow YAML parses locally and the complete hosted matrix passed in run `34853070893`.
 - Remote verification before these repairs: `origin/master` includes the implementation through `3b2f35b`; hosted Hammerspoon round trip, Python 3.12/3.13 on Ubuntu/macOS, Lua checks, and macOS SDK tests all passed.

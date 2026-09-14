@@ -15,6 +15,7 @@
 
 - Preserve the single-client, local Unix-socket trust model unless a task
   explicitly changes it.
-- Keep dangerous actions disabled by default and document any new capability or
-  permission requirement.
+- Keep the complete feature set enabled by default and document any new
+  capability or permission requirement. Features may be disabled explicitly by
+  configuration when an operator needs a restricted deployment.
 - Run the relevant checks from `Makefile` before handing off changes.

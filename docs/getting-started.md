@@ -80,14 +80,14 @@ With automatic reconnect enabled, the iterator remains available while the
 server is temporarily unavailable. With `auto_reconnect=False`, the iterator
 ends when the peer closes the socket.
 
-## Enable dangerous actions deliberately
+## Restrict the feature set deliberately
 
-The following classes of action are disabled by default:
+The following classes of action are available by default:
 
 - keyboard and mouse injection;
 - screen locking and starting the screensaver;
 - quitting applications.
 
-Set `MACAPI_ENABLE_DANGEROUS_ACTIONS=1` in the environment inherited by
-Hammerspoon only when the machine and caller are trusted. The setting is read
-when the Lua configuration module loads; reload Hammerspoon after changing it.
+Set `MACAPI_ENABLE_DANGEROUS_ACTIONS=0` in the environment inherited by
+Hammerspoon to disable those operations. The setting is read when the Lua
+configuration module loads; reload Hammerspoon after changing it.

@@ -68,7 +68,7 @@ M.methods["system.userActivity"] = function()
     return nil
 end
 
---- Lock the screen when dangerous actions are enabled.
+--- Lock the screen unless the feature set was explicitly restricted.
 M.methods["system.lock"] = function()
     if not config.dangerous_actions_enabled then
         return common.error("FEATURE_DISABLED", "system.lock is disabled by configuration")
@@ -77,7 +77,7 @@ M.methods["system.lock"] = function()
     return nil
 end
 
---- Start the screensaver when dangerous actions are enabled.
+--- Start the screensaver unless the feature set was explicitly restricted.
 M.methods["system.screensaver"] = function()
     if not config.dangerous_actions_enabled then
         return common.error("FEATURE_DISABLED", "system.screensaver is disabled by configuration")

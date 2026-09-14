@@ -1,8 +1,8 @@
 --- Application observation and control RPC service.
 ---
 --- Methods are exported through the `methods` table and merged into the
---- dispatcher. Application quitting is guarded by the dangerous-action flag;
---- read-only inspection and focus/hide operations remain available.
+--- dispatcher. Application quitting is guarded by the configurable feature
+--- flag; the full API is enabled by default.
 local application = require("hs.application")
 local validators = require("macapi.validators")
 local common = require("macapi.common")
@@ -63,7 +63,7 @@ M.methods["apps.unhide"] = function(params)
     return action(params, "unhide", function(app) app:unhide() end)
 end
 
---- Quit an application when dangerous actions are enabled.
+--- Quit an application unless the feature set was explicitly restricted.
 M.methods["apps.quit"] = function(params)
     if not config.dangerous_actions_enabled then
         return common.error("FEATURE_DISABLED", "apps.quit is disabled by configuration")

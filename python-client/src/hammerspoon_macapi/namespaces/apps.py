@@ -46,5 +46,5 @@ class AppsClient:
         await self._api.call("apps.unhide", {"bundle_id": bundle_id}, result_type=type(None))
 
     async def quit(self, bundle_id: str) -> None:
-        """Quit an application; requires dangerous actions to be enabled."""
+        """Quit an application unless controls were disabled by configuration."""
         await self._api.call("apps.quit", {"bundle_id": bundle_id}, result_type=type(None))

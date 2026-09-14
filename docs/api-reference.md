@@ -22,11 +22,11 @@ the lower-level `MacAPI.call()` can invoke any method listed below.
 | `system.info` | none | `SystemInfo` | Hostname, macOS version, and host addresses. |
 | `system.status` | none | `SystemStatus` | Tracked lock/sleep state and power information. |
 | `system.userActivity` | none | `None` | Declares user activity to Hammerspoon. |
-| `system.lock` | none | `None` | Dangerous action; disabled by default. |
-| `system.screensaver` | none | `None` | Dangerous action; disabled by default. |
+| `system.lock` | none | `None` | Available by default; can be restricted by configuration. |
+| `system.screensaver` | none | `None` | Available by default; can be restricted by configuration. |
 
-`system.lock` and `system.screensaver` return `FEATURE_DISABLED` unless
-`MACAPI_ENABLE_DANGEROUS_ACTIONS=1` was present when Hammerspoon loaded the
+`system.lock` and `system.screensaver` return `FEATURE_DISABLED` only when
+`MACAPI_ENABLE_DANGEROUS_ACTIONS=0` was present when Hammerspoon loaded the
 configuration.
 
 ## Applications

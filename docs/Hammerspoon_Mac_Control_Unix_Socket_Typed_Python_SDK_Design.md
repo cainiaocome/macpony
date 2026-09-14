@@ -2730,7 +2730,8 @@ The Lua server is complete when:
 - [ ] Event queue is bounded.
 - [ ] High-frequency events are coalesced.
 - [ ] Slow-client behavior is bounded.
-- [ ] Dangerous actions are disabled by default.
+- [ ] The complete feature set is enabled by default; restricted deployments
+      can disable dangerous actions explicitly.
 
 ---
 

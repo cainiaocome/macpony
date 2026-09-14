@@ -33,9 +33,9 @@ class SystemClient:
         await self._api.call("system.userActivity", result_type=type(None))
 
     async def lock(self) -> None:
-        """Lock the screen when dangerous actions are enabled."""
+        """Lock the screen unless controls were disabled by configuration."""
         await self._api.call("system.lock", result_type=type(None))
 
     async def start_screensaver(self) -> None:
-        """Start the screensaver when dangerous actions are enabled."""
+        """Start the screensaver unless controls were disabled by configuration."""
         await self._api.call("system.screensaver", result_type=type(None))
