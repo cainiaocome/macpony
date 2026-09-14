@@ -12,6 +12,11 @@ local accept_timer
 local read_pending = false
 local connection_count = 0
 local TAG_LINE = 1
+local debug_enabled = os.getenv("MACAPI_DEBUG") == "1"
+
+local function debug(message)
+    if debug_enabled then hs.printf("macapi debug: %s", message) end
+end
 
 local function quote(value)
     return "'" .. value:gsub("'", "'\\''") .. "'"
@@ -47,6 +52,7 @@ local function send(message)
         hs.printf("macapi socket write error: %s", tostring(write_error))
         return false
     end
+    debug("response/event written")
     return true
 end
 
@@ -57,14 +63,20 @@ end
 
 local function read_next()
     if not listener or read_pending then return end
-    if listener:connections() ~= 1 then return end
+    local connections = listener:connections()
+    if connections ~= 1 then return end
     read_pending = true
+    debug("read armed")
     local ok, result = pcall(function() return listener:read("\n", TAG_LINE) end)
-    if not ok or not result then read_pending = false end
+    if not ok or not result then
+        read_pending = false
+        debug("read arm failed: " .. tostring(result))
+    end
 end
 
 local function callback(data, tag)
     read_pending = false
+    debug("read callback tag=" .. tostring(tag) .. " bytes=" .. tostring(data and #data or 0))
     if tag ~= TAG_LINE then return end
     if not listener then return end
     if listener:connections() > 1 then
@@ -94,6 +106,7 @@ function M.start()
         if listener then
             local connections = listener:connections()
             if connections ~= connection_count then
+                debug("connection count " .. tostring(connection_count) .. " -> " .. tostring(connections))
                 connection_count = connections
                 read_pending = false
             end

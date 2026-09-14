@@ -71,7 +71,7 @@ jobs:
           cp -R hammerspoon/macapi "$HOME/.hammerspoon/macapi"
       - name: Launch Hammerspoon
         run: |
-          nohup /Applications/Hammerspoon.app/Contents/MacOS/Hammerspoon \
+          MACAPI_DEBUG=1 nohup /Applications/Hammerspoon.app/Contents/MacOS/Hammerspoon \
             >/tmp/hammerspoon-open.log 2>&1 </dev/null &
           socket_path="$HOME/Library/Application Support/HammerspoonMacAPI/run/macapi.sock"
           for attempt in $(seq 1 30); do
