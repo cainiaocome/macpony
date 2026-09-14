@@ -5,11 +5,10 @@ from pathlib import Path
 
 import pytest
 import pytest_asyncio
-
 from hammerspoon_macapi import (
     ConnectionLostError,
-    MacEvent,
     MacAPI,
+    MacEvent,
     RPCTimeoutError,
     WindowFocusedEvent,
 )

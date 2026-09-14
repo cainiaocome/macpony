@@ -4,7 +4,6 @@ import json
 from pathlib import Path
 
 import pytest
-
 from hammerspoon_macapi.events import (
     ClipboardChangedEvent,
     PowerBatteryChangedEvent,
@@ -20,7 +19,6 @@ from hammerspoon_macapi.exceptions import (
 )
 from hammerspoon_macapi.models import InlineScreenshot, SystemInfo
 from hammerspoon_macapi.protocol import RawEvent, decode_message
-
 
 FIXTURES = Path(__file__).parents[2] / "protocol-fixtures"
 
@@ -107,7 +105,7 @@ def test_rpc_error_mapping() -> None:
 
 
 def test_malformed_message_is_rejected() -> None:
-    with pytest.raises(Exception):
+    with pytest.raises(ProtocolError):
         decode_message(json.dumps({"type": "unknown"}))
 
 

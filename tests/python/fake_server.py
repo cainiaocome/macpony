@@ -9,7 +9,6 @@ from typing import cast
 
 from hammerspoon_macapi.constants import PROTOCOL_VERSION
 
-
 CAPABILITIES: dict[str, object] = {
     "protocol_version": 1,
     "server_version": "test",

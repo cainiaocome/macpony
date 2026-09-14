@@ -5,7 +5,6 @@ import sys
 from typing import cast
 
 import pytest
-
 from hammerspoon_macapi import MacAPI
 
 
