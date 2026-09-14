@@ -35,7 +35,7 @@ local function ensure_runtime()
 end
 
 local function send(message)
-    if not listener or not listener:connected() or listener:connections() ~= 1 then return false end
+    if not listener or listener:connections() ~= 1 then return false end
     local encoded, error = protocol.encode(message)
     if not encoded then
         hs.printf("macapi encode error: %s", tostring(error))
