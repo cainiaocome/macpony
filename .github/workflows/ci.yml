@@ -84,7 +84,7 @@ jobs:
           exit 1
       - name: Inspect Hammerspoon listener
         run: |
-          /opt/homebrew/bin/hs -c 'hs.socket.setLogLevel("debug"); local state = require("macapi").server.status(); print(require("hs.json").encode(state))'
+          /opt/homebrew/bin/hs -c 'local state = require("macapi").server.status(); print(require("hs.json").encode(state))'
       - name: Real Hammerspoon integration test
         env:
           RUN_HAMMERSPOON_INTEGRATION: '1'
