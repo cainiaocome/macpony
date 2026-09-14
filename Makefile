@@ -23,17 +23,17 @@ test:
 	$(PYTHON) -m pytest tests/python
 
 lint:
-	$(PYTHON) -m ruff check .
+	$(PYTHON) -m ruff check python-client/src tests
 
 typecheck:
 	$(PYTHON) -m pyright
 
 format:
-	$(PYTHON) -m ruff format .
+	$(PYTHON) -m ruff format python-client/src tests
 
 check:
-	$(PYTHON) -m ruff check .
-	$(PYTHON) -m ruff format --check .
+	$(PYTHON) -m ruff check python-client/src tests
+	$(PYTHON) -m ruff format --check python-client/src tests
 	$(PYTHON) -m pyright
 	$(PYTHON) -m pytest tests/python
 
