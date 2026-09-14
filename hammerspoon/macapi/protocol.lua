@@ -20,7 +20,8 @@ function M.decode(line)
     if #line > config.max_line_bytes then
         return nil, "message exceeds maximum line size"
     end
-    local ok, payload = pcall(hs_json.decode, line:gsub("\n$", ""))
+    local json_line = line:gsub("\n$", "")
+    local ok, payload = pcall(hs_json.decode, json_line)
     if not ok or not payload then return nil, tostring(payload or "invalid JSON") end
     if type(payload) ~= "table" then return nil, "message must be an object" end
     if payload.v ~= config.protocol_version then return nil, "unsupported protocol version" end

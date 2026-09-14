@@ -21,11 +21,11 @@ Implement the Unix-domain-socket NDJSON protocol, Hammerspoon server, typed asyn
 ## In progress
 
 - Final acceptance review and macOS-only runtime validation through GitHub Actions.
-- The hosted Hammerspoon job creates the real socket and accepts the Python connection, but the `system.capabilities` response currently times out. The server now resets its pending-read state on connection-count transitions and only arms reads with one active client; the next run includes listener-state and unified-log diagnostics.
+- The hosted Hammerspoon job now accepts and reads the Python request, but an Hammerspoon JSON decode call was receiving the `gsub` substitution count as a second argument. The protocol decoder is fixed; the next run is the final runtime confirmation.
 
 ## Remaining
 
-- Observe the next GitHub macOS Hammerspoon job and use its listener-state diagnostics to resolve the remaining response-path failure.
+- Observe the next GitHub macOS Hammerspoon job and confirm the RPC round trip after the JSON decoder fix.
 - After the smoke test passes, perform final diff/status review and simplify this handoff.
 
 ## Constraints and decisions
@@ -41,5 +41,5 @@ Implement the Unix-domain-socket NDJSON protocol, Hammerspoon server, typed asyn
 - `python -m build python-client`: passed.
 - `luaparser` parsed all 21 Lua files; native `luac`/Hammerspoon runtime validation is deferred to macOS CI.
 - `pytest -q`: passed (14 tests, 1 opt-in integration test skipped on Linux).
-- GitHub workflow YAML parses locally; the native macOS/Hammerspoon job has run and currently fails only because the RPC response is not observed.
-- Remote verification: commits through `8d0695d` are pushed to `origin/master`; run `34848313203` confirmed the socket is created and the client connects, but `system.capabilities` timed out after 5 seconds. Python 3.13 Ubuntu/macOS jobs and the Lua syntax/macOS SDK job progressed successfully before the run was canceled while waiting on Python 3.12 jobs.
+- GitHub workflow YAML parses locally; the native macOS/Hammerspoon job has run through the decode diagnosis and the final cleanup is pending hosted confirmation.
+- Remote verification: commits through `e1a97a6` are pushed to `origin/master`; run `34851111761` confirmed 97 Python request bytes were read and identified the Hammerspoon JSON argument error. Python 3.13 Ubuntu/macOS jobs and Lua syntax checks continue to pass.

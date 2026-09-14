@@ -11,19 +11,7 @@ local listener
 local accept_timer
 local read_pending = false
 local connection_count = 0
-local line_buffer = ""
-local read_callbacks = 0
-local requests_decoded = 0
-local responses_written = 0
-local protocol_errors = 0
-local last_protocol_error = ""
-local last_line = ""
-local TAG_BYTE = 1
-local debug_enabled = os.getenv("MACAPI_DEBUG") == "1"
-
-local function debug(message)
-    if debug_enabled then hs.printf("macapi debug: %s", message) end
-end
+local TAG_LINE = 1
 
 local function quote(value)
     return "'" .. value:gsub("'", "'\\''") .. "'"
@@ -59,8 +47,6 @@ local function send(message)
         hs.printf("macapi socket write error: %s", tostring(write_error))
         return false
     end
-    responses_written = responses_written + 1
-    debug("response/event written")
     return true
 end
 
@@ -74,48 +60,27 @@ local function read_next()
     local connections = listener:connections()
     if connections ~= 1 then return end
     read_pending = true
-    debug("read armed")
-    local ok, result = pcall(function() return listener:read(1, TAG_BYTE) end)
+    local ok, result = pcall(function() return listener:read("\n", TAG_LINE) end)
     if not ok or not result then
         read_pending = false
-        debug("read arm failed: " .. tostring(result))
     end
 end
 
 local function callback(data, tag)
     read_pending = false
-    read_callbacks = read_callbacks + 1
-    debug("read callback tag=" .. tostring(tag) .. " bytes=" .. tostring(data and #data or 0))
-    if tag ~= TAG_BYTE or type(data) ~= "string" then return end
+    if tag ~= TAG_LINE then return end
     if not listener then return end
     if listener:connections() > 1 then
         listener:disconnect()
         read_next()
         return
     end
-    line_buffer = line_buffer .. data
-    if #line_buffer > config.max_line_bytes then
-        hs.printf("macapi protocol error: message exceeds maximum line size")
-        line_buffer = ""
-        read_next()
-        return
-    end
-    if data:sub(-1) ~= "\n" then
-        read_next()
-        return
-    end
-    local line = line_buffer
-    line_buffer = ""
-    last_line = line
-    local request, error = protocol.decode(line)
+    local request, error = protocol.decode(data)
     if not request then
-        protocol_errors = protocol_errors + 1
-        last_protocol_error = tostring(error)
         hs.printf("macapi protocol error: %s", tostring(error))
         read_next()
         return
     end
-    requests_decoded = requests_decoded + 1
     dispatcher.handle(request, respond)
     eventbus.flush()
     read_next()
@@ -132,10 +97,8 @@ function M.start()
         if listener then
             local connections = listener:connections()
             if connections ~= connection_count then
-                debug("connection count " .. tostring(connection_count) .. " -> " .. tostring(connections))
                 connection_count = connections
                 read_pending = false
-                if connections == 0 then line_buffer = "" end
             end
         end
         read_next()
@@ -144,34 +107,11 @@ function M.start()
     return listener
 end
 
-function M.status()
-    return {
-        active = listener ~= nil,
-        connected = listener and listener:connected() or false,
-        connections = listener and listener:connections() or 0,
-        read_pending = read_pending,
-        buffered_bytes = #line_buffer,
-        read_callbacks = read_callbacks,
-        requests_decoded = requests_decoded,
-        responses_written = responses_written,
-        protocol_errors = protocol_errors,
-        last_protocol_error = last_protocol_error,
-        last_line = last_line,
-    }
-end
-
 function M.stop()
     if not listener then return end
     if accept_timer then accept_timer:stop(); accept_timer = nil end
     read_pending = false
     connection_count = 0
-    line_buffer = ""
-    read_callbacks = 0
-    requests_decoded = 0
-    responses_written = 0
-    protocol_errors = 0
-    last_protocol_error = ""
-    last_line = ""
     listener:disconnect()
     listener = nil
     local attributes = fs.attributes(config.socket_path)
