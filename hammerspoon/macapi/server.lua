@@ -35,7 +35,7 @@ local function ensure_runtime()
 end
 
 local function send(message)
-    if not listener or listener:connections() ~= 1 then return false end
+    if not listener or not listener:connected() or listener:connections() ~= 1 then return false end
     local encoded, error = protocol.encode(message)
     if not encoded then
         hs.printf("macapi encode error: %s", tostring(error))
@@ -57,8 +57,8 @@ end
 local function read_next()
     if not listener or read_pending or listener:connections() ~= 1 then return end
     read_pending = true
-    local ok = pcall(function() listener:read("\n", TAG_LINE) end)
-    if not ok then read_pending = false end
+    local ok, result = pcall(function() return listener:read("\n", TAG_LINE) end)
+    if not ok or not result then read_pending = false end
 end
 
 local function callback(data, tag)
