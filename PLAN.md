@@ -40,5 +40,5 @@ Implement the Unix-domain-socket NDJSON protocol, Hammerspoon server, typed asyn
 - `python -m build python-client`: passed.
 - `luaparser` parsed all 21 Lua files; native `luac`/Hammerspoon runtime validation is deferred to macOS CI.
 - `pytest -q`: passed (14 tests, 1 opt-in integration test skipped on Linux).
-- GitHub workflow YAML parses locally and the complete hosted matrix passed in run `34852585507`.
-- Remote verification: `origin/master` includes the implementation through `264a6d1`; hosted Hammerspoon round trip, Python 3.12/3.13 on Ubuntu/macOS, Lua checks, and macOS SDK tests all passed.
+- GitHub workflow YAML parses locally and the complete hosted matrix passed in run `34853070893`.
+- Remote verification: `origin/master` includes the implementation through `365de9e`; hosted Hammerspoon round trip, Python 3.12/3.13 on Ubuntu/macOS, Lua checks, and macOS SDK tests all passed.
