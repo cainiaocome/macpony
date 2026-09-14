@@ -56,8 +56,6 @@ end
 
 local function read_next()
     if not listener or read_pending then return end
-    local connections = listener:connections()
-    if connections > 1 or (connections == 0 and not listener:connected()) then return end
     read_pending = true
     local ok, result = pcall(function() return listener:read("\n", TAG_LINE) end)
     if not ok or not result then read_pending = false end
@@ -91,11 +89,20 @@ function M.start()
     chmod(config.socket_path, "600")
     eventbus.init(send)
     accept_timer = timer.doEvery(0.1, function()
-        if listener and listener:connections() ~= 1 then read_pending = false end
+        if listener and listener:connections() == 0 then read_pending = false end
         read_next()
     end)
     read_next()
     return listener
+end
+
+function M.status()
+    return {
+        active = listener ~= nil,
+        connected = listener and listener:connected() or false,
+        connections = listener and listener:connections() or 0,
+        read_pending = read_pending,
+    }
 end
 
 function M.stop()
