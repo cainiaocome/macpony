@@ -12,6 +12,7 @@ local accept_timer
 local read_pending = false
 local connection_count = 0
 local line_buffer = ""
+local read_callbacks = 0
 local TAG_BYTE = 1
 local debug_enabled = os.getenv("MACAPI_DEBUG") == "1"
 
@@ -77,6 +78,7 @@ end
 
 local function callback(data, tag)
     read_pending = false
+    read_callbacks = read_callbacks + 1
     debug("read callback tag=" .. tostring(tag) .. " bytes=" .. tostring(data and #data or 0))
     if tag ~= TAG_BYTE or type(data) ~= "string" then return end
     if not listener then return end
@@ -139,6 +141,7 @@ function M.status()
         connections = listener and listener:connections() or 0,
         read_pending = read_pending,
         buffered_bytes = #line_buffer,
+        read_callbacks = read_callbacks,
     }
 end
 
@@ -148,6 +151,7 @@ function M.stop()
     read_pending = false
     connection_count = 0
     line_buffer = ""
+    read_callbacks = 0
     listener:disconnect()
     listener = nil
     local attributes = fs.attributes(config.socket_path)
