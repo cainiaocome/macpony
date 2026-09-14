@@ -1,3 +1,9 @@
+--- Single-client Unix-domain-socket NDJSON server.
+---
+--- `hs.socket.server` exposes a shared listener/client object, so version 1
+--- keeps the protocol single-client and refuses to write while an extra
+--- connection is attached. Incoming bytes are assembled into bounded lines;
+--- malformed lines are reported without killing the listener.
 local fs = require("hs.fs")
 local socket = require("hs.socket")
 local timer = require("hs.timer")
@@ -24,6 +30,8 @@ local function chmod(path, mode)
 end
 
 local function ensure_runtime()
+    -- Refuse to replace a non-socket path; this protects an operator mistake
+    -- from being silently deleted during startup.
     fs.mkdir(config.root_dir)
     fs.mkdir(config.run_dir)
     chmod(config.root_dir, "700")
@@ -38,6 +46,8 @@ local function ensure_runtime()
 end
 
 local function send(message)
+    -- hs.socket writes through the listener and may broadcast to all clients;
+    -- never send while the single-client invariant is not true.
     if not listener or listener:connections() ~= 1 then return false end
     local encoded, error = protocol.encode(message)
     if not encoded then
@@ -58,6 +68,8 @@ local function respond(id, ok, result, code, message)
 end
 
 local function read_next()
+    -- Read exactly one byte so the server can enforce the record bound before
+    -- a delimiter read allocates an unbounded buffer.
     if not listener or read_pending then return end
     local connections = listener:connections()
     if connections ~= 1 then return end
@@ -69,6 +81,8 @@ local function read_next()
 end
 
 local function callback(data, tag)
+    -- Append bytes, discard oversized records through their newline, and
+    -- dispatch only complete request objects.
     read_pending = false
     if tag ~= TAG_BYTE then return end
     if not listener then return end
@@ -112,6 +126,7 @@ local function callback(data, tag)
 end
 
 function M.start()
+    --- Create the runtime directory, bind the socket, and arm the read loop.
     if listener then return listener end
     ensure_runtime()
     listener = socket.server(config.socket_path, callback)
@@ -141,6 +156,8 @@ function M.start()
 end
 
 function M.stop()
+    --- Stop timers, close the listener, cancel the event bus, and remove only
+    --- the socket created by this service.
     if not listener then return end
     if accept_timer then accept_timer:stop(); accept_timer = nil end
     read_pending = false

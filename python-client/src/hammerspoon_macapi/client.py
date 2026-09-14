@@ -1,3 +1,5 @@
+"""Public asynchronous façade for the Hammerspoon MacAPI socket service."""
+
 from __future__ import annotations
 
 from collections.abc import Mapping
@@ -39,6 +41,7 @@ class MacAPI:
         reconnect_max_delay: float = DEFAULT_RECONNECT_MAX_DELAY,
         event_queue_size: int = 256,
     ) -> None:
+        """Create a client; the socket is opened by :meth:`connect`."""
         self.socket_path = Path(socket_path).expanduser()
         self.capabilities: Capabilities | None = None
         self.events = EventsClient(self, queue_size=event_queue_size)
@@ -62,10 +65,12 @@ class MacAPI:
 
     @property
     def connection_state(self) -> ConnectionState:
+        """Return the underlying socket connection state."""
         return self._connection.state
 
     @property
     def connected(self) -> bool:
+        """Whether the client currently has a completed connection."""
         return self._connection.connected
 
     @property
@@ -74,9 +79,11 @@ class MacAPI:
         return self._connection.pending_count
 
     async def connect(self) -> None:
+        """Open the socket and negotiate protocol capabilities."""
         await self._connection.connect()
 
     async def close(self) -> None:
+        """Cancel event handlers and close the transport permanently."""
         await self.events.close()
         await self._connection.close()
 
@@ -115,6 +122,7 @@ class MacAPI:
         result_type: object,
         timeout: float | None = None,
     ) -> object:
+        """Call a raw RPC method and validate its result as ``result_type``."""
         return await self._connection.call(
             method,
             params,
@@ -123,6 +131,7 @@ class MacAPI:
         )
 
     async def wait_until_connected(self) -> None:
+        """Wait until the initial connection or a reconnect is established."""
         await self._connection.wait_until_connected()
 
     async def _on_connected(self) -> None:

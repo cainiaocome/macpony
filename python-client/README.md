@@ -2,6 +2,9 @@
 
 Typed async Python SDK for the local Hammerspoon Mac Control API.
 
+See the repository [Python SDK guide](../docs/python-sdk.md), [API reference](../docs/api-reference.md),
+and [events guide](../docs/events.md) for the complete public contract.
+
 ```python
 import asyncio
 

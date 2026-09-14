@@ -1,3 +1,8 @@
+--- Hammerspoon watcher lifecycle and event translation.
+---
+--- Watchers emit only into eventbus.lua. `stop()` explicitly unsubscribes
+--- window and per-device callbacks and disables the self-rescheduling
+--- clipboard callback so a Hammerspoon reload does not leak observers.
 local application_watcher = require("hs.application.watcher")
 local battery = require("hs.battery")
 local eventbus = require("macapi.eventbus")
@@ -31,6 +36,8 @@ local app_events = {
 }
 
 function M.start()
+    --- Start application, window, screen, power, Wi-Fi, audio, battery, and
+    --- clipboard watchers.
     watchers.app = application_watcher.new(function(name, event, app)
         local event_name = app_events[event]
         if not event_name or not app then return end
@@ -192,6 +199,7 @@ function M.start()
 end
 
 function M.stop()
+    --- Stop every watcher and reset tracked state.
     clipboard_active = false
     if watchers.windows and watchers.windows.unsubscribeAll then
         pcall(function() watchers.windows:unsubscribeAll() end)

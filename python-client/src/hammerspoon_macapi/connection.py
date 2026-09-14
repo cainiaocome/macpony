@@ -1,3 +1,5 @@
+"""Correlated, single-reader asyncio transport for the Unix socket protocol."""
+
 from __future__ import annotations
 
 import asyncio
@@ -86,14 +88,17 @@ class SocketConnection:
 
     @property
     def state(self) -> ConnectionState:
+        """Return the current transport lifecycle state."""
         return self._state
 
     @property
     def connected(self) -> bool:
+        """Whether the transport has completed its capability handshake."""
         return self._state == ConnectionState.CONNECTED
 
     @property
     def pending_count(self) -> int:
+        """Return the number of RPC futures awaiting a response."""
         return len(self._pending)
 
     async def connect(self) -> None:
@@ -112,6 +117,7 @@ class SocketConnection:
                 raise
 
     async def close(self) -> None:
+        """Stop reconnect attempts, fail pending calls, and close the writer."""
         self._closing = True
         self._set_state(ConnectionState.CLOSING)
         if self._reconnect_task is not None:
@@ -124,6 +130,7 @@ class SocketConnection:
         self._connected_event.clear()
 
     async def wait_until_connected(self) -> None:
+        """Block until the connection enters ``connected`` state."""
         await self._connected_event.wait()
 
     @overload
@@ -154,6 +161,12 @@ class SocketConnection:
         result_type: object,
         timeout: float | None = None,
     ) -> object:
+        """Send one request and return its typed result.
+
+        The request is registered before writing so a fast response cannot race
+        request correlation. Cancellation and timeout both remove the pending
+        entry; a transport failure also fails every other in-flight request.
+        """
         writer = self._writer
         if writer is None or self._state not in (
             ConnectionState.CONNECTED,

@@ -1,3 +1,7 @@
+--- Explicit RPC registry and capability catalog.
+---
+--- Service modules contribute only named functions through their `methods`
+--- table; no arbitrary Lua evaluation is exposed.
 local system = require("macapi.system")
 local apps = require("macapi.apps")
 local windows = require("macapi.windows")
@@ -42,6 +46,7 @@ local event_names = {
 }
 
 function M.capabilities()
+    --- Return sorted method names and the supported event catalog.
     local names = {}
     for name, _ in pairs(methods) do table.insert(names, name) end
     table.sort(names)
@@ -51,6 +56,7 @@ end
 system.set_capabilities_provider(M.capabilities)
 
 function M.handle(request, respond)
+    --- Dispatch one validated request and invoke the response callback exactly once.
     local handler = methods[request.method]
     if not handler then
         respond(request.id, false, nil, "METHOD_NOT_FOUND", "unknown method: " .. request.method)

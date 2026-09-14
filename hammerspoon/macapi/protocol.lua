@@ -1,3 +1,7 @@
+--- Version-1 wire validation and JSON encoding helpers.
+---
+--- Hammerspoon JSON treats an empty Lua table as an array. `empty_object()`
+--- returns a private marker that `encode()` rewrites to an empty JSON object.
 local hs_json = require("hs.json")
 local config = require("macapi.config")
 
@@ -15,6 +19,7 @@ local function error_message(id, code, message)
 end
 
 function M.decode(line)
+    --- Validate one newline-terminated request and return `(request, error, id)`.
     if type(line) ~= "string" then
         return nil, "line is not text"
     end
@@ -36,6 +41,7 @@ function M.decode(line)
 end
 
 function M.success(id, result)
+    --- Build a successful RPC response envelope.
     return {
         v = config.protocol_version,
         id = id,
@@ -46,10 +52,12 @@ function M.success(id, result)
 end
 
 function M.failure(id, code, message)
+    --- Build an application-level RPC error response envelope.
     return error_message(id, code, message)
 end
 
 function M.encode(message)
+    --- Encode a response/event envelope as one compact NDJSON record.
     local ok, encoded = pcall(hs_json.encode, message)
     if not ok or not encoded then return nil, tostring(encoded or "unable to encode JSON") end
     -- hs.json encodes an empty Lua table as [], so replace the private marker
@@ -59,6 +67,7 @@ function M.encode(message)
 end
 
 function M.protocol_failure(id, message)
+    --- Build a non-RPC protocol error for malformed incoming data.
     return {
         v = config.protocol_version,
         id = id,
@@ -69,6 +78,7 @@ function M.protocol_failure(id, message)
 end
 
 function M.empty_object()
+    --- Return the private marker representing an empty JSON object.
     return { [EMPTY_OBJECT_KEY] = true }
 end
 

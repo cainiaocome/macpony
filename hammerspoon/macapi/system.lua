@@ -1,3 +1,7 @@
+--- System metadata, capabilities, power state, and guarded actions.
+---
+--- The dispatcher injects the capabilities provider after all service methods
+--- are registered, avoiding a circular dependency between system and dispatch.
 local host = require("hs.host")
 local caffeinate = require("hs.caffeinate")
 local battery = require("hs.battery")
@@ -8,13 +12,16 @@ local M = { methods = {} }
 local capabilities_provider = function() return {} end
 
 function M.set_capabilities_provider(provider)
+    --- Install the dispatcher callback used by `system.capabilities`.
     capabilities_provider = provider
 end
 
+--- Non-destructive transport and dispatch health check.
 M.methods["protocol.ping"] = function()
     return { pong = true }
 end
 
+--- Return protocol, method, event, and feature catalogs.
 M.methods["system.capabilities"] = function()
     return {
         protocol_version = config.protocol_version,
@@ -35,6 +42,7 @@ M.methods["system.capabilities"] = function()
     }
 end
 
+--- Return hostname, macOS version, and host addresses.
 M.methods["system.info"] = function()
     return {
         hostname = host.localizedName(),
@@ -43,6 +51,7 @@ M.methods["system.info"] = function()
     }
 end
 
+--- Return tracked lock/sleep and current power information.
 M.methods["system.status"] = function()
     return {
         locked = state.locked,
@@ -53,11 +62,13 @@ M.methods["system.status"] = function()
     }
 end
 
+--- Tell macOS that the caller is active.
 M.methods["system.userActivity"] = function()
     caffeinate.declareUserActivity()
     return nil
 end
 
+--- Lock the screen when dangerous actions are enabled.
 M.methods["system.lock"] = function()
     if not config.dangerous_actions_enabled then
         return common.error("FEATURE_DISABLED", "system.lock is disabled by configuration")
@@ -66,6 +77,7 @@ M.methods["system.lock"] = function()
     return nil
 end
 
+--- Start the screensaver when dangerous actions are enabled.
 M.methods["system.screensaver"] = function()
     if not config.dangerous_actions_enabled then
         return common.error("FEATURE_DISABLED", "system.screensaver is disabled by configuration")

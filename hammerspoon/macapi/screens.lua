@@ -1,3 +1,7 @@
+--- Screen enumeration, brightness, and screenshot RPC service.
+---
+--- Inline screenshots use the image's encoded dimensions rather than the
+--- usable desktop frame. File screenshots stay on the Hammerspoon host.
 local config = require("macapi.config")
 local timer = require("hs.timer")
 local validators = require("macapi.validators")
@@ -12,6 +16,7 @@ local function find(params)
     return screen
 end
 
+--- Return all connected screens and their usable frames.
 M.methods["screens.list"] = function()
     local result = {}
     local primary = hs.screen.primaryScreen()
@@ -21,12 +26,14 @@ M.methods["screens.list"] = function()
     return result
 end
 
+--- Return one screen by numeric ID or UUID.
 M.methods["screens.get"] = function(params)
     local screen, error = find(params)
     if not screen then return nil, error end
     return common.screen_info(screen, screen == hs.screen.primaryScreen())
 end
 
+--- Set a screen brightness value between 0 and 1.
 M.methods["screens.setBrightness"] = function(params)
     local screen, error = find(params)
     if not screen then return nil, error end
@@ -42,6 +49,7 @@ M.methods["screens.setBrightness"] = function(params)
     return nil
 end
 
+--- Capture a screen inline or as a runtime-directory PNG file.
 M.methods["screens.screenshot"] = function(params)
     params = params or {}
     local mode = params.mode or "inline"

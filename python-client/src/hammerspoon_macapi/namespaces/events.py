@@ -20,6 +20,8 @@ _EVENTS_CLOSED = object()
 
 
 class EventSubscription(BaseModel):
+    """One server-side event pattern and whether its payload is included."""
+
     model_config = ConfigDict(extra="forbid")
 
     event: str
@@ -27,6 +29,8 @@ class EventSubscription(BaseModel):
 
 
 class EventsClient(AsyncIterator[MacEvent]):
+    """Bounded event iterator, callback registry, and subscription manager."""
+
     def __init__(self, api: MacAPI, queue_size: int = DEFAULT_EVENT_QUEUE_SIZE) -> None:
         self._api = api
         self._queue: asyncio.Queue[MacEvent | object] = asyncio.Queue(maxsize=queue_size)
@@ -37,9 +41,11 @@ class EventsClient(AsyncIterator[MacEvent]):
         self._closed = False
 
     def __aiter__(self) -> EventsClient:
+        """Return this object as the async event iterator."""
         return self
 
     async def __anext__(self) -> MacEvent:
+        """Wait for the next event or terminate after client shutdown."""
         item = await self._queue.get()
         if item is _EVENTS_CLOSED:
             # Keep the terminal marker available to concurrent consumers.
@@ -48,6 +54,7 @@ class EventsClient(AsyncIterator[MacEvent]):
         return cast(MacEvent, item)
 
     async def on_event(self, event: MacEvent) -> None:
+        """Queue one event and schedule registered callbacks."""
         if self._closed:
             return
         if self._queue.full():
@@ -64,9 +71,11 @@ class EventsClient(AsyncIterator[MacEvent]):
         self._handlers.add(handler)
 
     def remove_handler(self, handler: EventHandler) -> None:
+        """Remove a previously registered callback, if present."""
         self._handlers.discard(handler)
 
     async def close(self) -> None:
+        """Cancel callback tasks and wake consumers waiting on the iterator."""
         if self._closed:
             return
         self._closed = True
@@ -99,6 +108,7 @@ class EventsClient(AsyncIterator[MacEvent]):
     async def subscribe(
         self, subscriptions: Sequence[str | EventSubscription]
     ) -> list[EventSubscription]:
+        """Subscribe to event names or prefix patterns and remember the result."""
         normalized = [
             item if isinstance(item, EventSubscription) else EventSubscription(event=item)
             for item in subscriptions
@@ -112,6 +122,7 @@ class EventsClient(AsyncIterator[MacEvent]):
         return result
 
     async def unsubscribe(self, subscriptions: Sequence[str | EventSubscription]) -> None:
+        """Remove selected subscriptions from the server and local cache."""
         normalized = [
             item if isinstance(item, EventSubscription) else EventSubscription(event=item)
             for item in subscriptions
@@ -125,10 +136,12 @@ class EventsClient(AsyncIterator[MacEvent]):
         self._subscriptions = [item for item in self._subscriptions if item.event not in remove]
 
     async def unsubscribe_all(self) -> None:
+        """Remove every server-side and locally remembered subscription."""
         await self._api.call("events.unsubscribeAll", result_type=type(None))
         self._subscriptions = []
 
     async def get_subscriptions(self) -> list[EventSubscription]:
+        """Fetch and cache the server's normalized subscription list."""
         result = await self._api.call(
             "events.getSubscriptions", result_type=list[EventSubscription]
         )
@@ -136,6 +149,7 @@ class EventsClient(AsyncIterator[MacEvent]):
         return result
 
     async def restore_subscriptions(self) -> None:
+        """Replay remembered subscriptions after a successful reconnect."""
         if not self._subscriptions:
             return
         result = await self._api.call(
@@ -147,4 +161,5 @@ class EventsClient(AsyncIterator[MacEvent]):
 
     @property
     def subscriptions(self) -> tuple[EventSubscription, ...]:
+        """Return the locally remembered normalized subscriptions."""
         return tuple(self._subscriptions)

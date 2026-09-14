@@ -1,9 +1,12 @@
+--- Shared conversion, lookup, and error helpers for service modules.
 local M = {}
 
+--- Convert an Hammerspoon geometry object to the wire frame shape.
 function M.frame(value)
     return { x = value.x, y = value.y, w = value.w, h = value.h }
 end
 
+--- Convert an Hammerspoon application object to an API response.
 function M.application_info(app)
     return {
         name = app:name() or "",
@@ -14,6 +17,7 @@ function M.application_info(app)
     }
 end
 
+--- Convert an Hammerspoon window object to an API response.
 function M.window_info(window)
     local app = window:application()
     local frame = window:frame()
@@ -30,6 +34,7 @@ function M.window_info(window)
     }
 end
 
+--- Convert an Hammerspoon screen object to an API response.
 function M.screen_info(screen, primary)
     local brightness = nil
     if type(screen.getBrightness) == "function" then
@@ -46,6 +51,7 @@ function M.screen_info(screen, primary)
     }
 end
 
+--- Find a window by its macOS window ID.
 function M.find_window(window_id)
     for _, window in ipairs(hs.window.allWindows()) do
         if window:id() == window_id then return window end
@@ -53,6 +59,7 @@ function M.find_window(window_id)
     return nil
 end
 
+--- Find a screen by numeric ID or UUID.
 function M.find_screen(screen_id)
     for _, screen in ipairs(hs.screen.allScreens()) do
         if tostring(screen:id()) == tostring(screen_id) or screen:getUUID() == screen_id then
@@ -62,6 +69,7 @@ function M.find_screen(screen_id)
     return nil
 end
 
+--- Return the two-value `(nil, error)` convention used by service methods.
 function M.error(code, message)
     return nil, { code = code, message = message }
 end

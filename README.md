@@ -4,6 +4,12 @@ Local macOS automation over a private Unix domain socket. Hammerspoon owns the
 macOS APIs; the Python client owns typed models, request correlation, events,
 timeouts, and reconnects.
 
+## Documentation
+
+The complete documentation index is [docs/README.md](docs/README.md). It links
+to the getting-started guide, architecture, wire protocol, RPC API, event
+catalog, Python SDK reference, and operations/troubleshooting guide.
+
 ## Run the Hammerspoon server
 
 Add this repository's `hammerspoon/` directory to Hammerspoon's Lua package

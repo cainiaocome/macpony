@@ -1,3 +1,7 @@
+--- Dangerous keyboard and mouse injection RPC service.
+---
+--- Every method checks `MACAPI_ENABLE_DANGEROUS_ACTIONS` before touching the
+--- event tap or mouse. Parameter validation happens after the safety gate.
 local eventtap = require("hs.eventtap")
 local mouse = require("hs.mouse")
 local validators = require("macapi.validators")
@@ -8,6 +12,7 @@ local M = { methods = {} }
 local allowed_modifiers = { cmd = true, ctrl = true, alt = true, shift = true, fn = true }
 local allowed_buttons = { left = true, right = true, middle = true }
 
+--- Send one key with optional cmd/ctrl/alt/shift/fn modifiers.
 M.methods["input.keystroke"] = function(params)
     if not config.dangerous_actions_enabled then
         return common.error("FEATURE_DISABLED", "input is disabled by configuration")
@@ -23,6 +28,7 @@ M.methods["input.keystroke"] = function(params)
     return nil
 end
 
+--- Type text through Hammerspoon's event tap.
 M.methods["input.type"] = function(params)
     if not config.dangerous_actions_enabled then
         return common.error("FEATURE_DISABLED", "input is disabled by configuration")
@@ -33,6 +39,7 @@ M.methods["input.type"] = function(params)
     return nil
 end
 
+--- Move the pointer to absolute screen coordinates.
 M.methods["input.mouseMove"] = function(params)
     if not config.dangerous_actions_enabled then
         return common.error("FEATURE_DISABLED", "input is disabled by configuration")
@@ -45,6 +52,7 @@ M.methods["input.mouseMove"] = function(params)
     return nil
 end
 
+--- Move and click a supported mouse button at absolute coordinates.
 M.methods["input.mouseClick"] = function(params)
     if not config.dangerous_actions_enabled then
         return common.error("FEATURE_DISABLED", "input is disabled by configuration")

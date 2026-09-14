@@ -1,3 +1,5 @@
+"""Typed display inspection, brightness, and screenshot methods."""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, cast
@@ -9,16 +11,21 @@ if TYPE_CHECKING:
 
 
 class ScreensClient:
+    """Namespace wrapper for the ``screens.*`` RPC methods."""
+
     def __init__(self, api: MacAPI) -> None:
         self._api = api
 
     async def list(self) -> list[ScreenInfo]:
+        """Return all connected screens and their usable frames."""
         return await self._api.call("screens.list", result_type=list[ScreenInfo])
 
     async def get(self, screen_id: str) -> ScreenInfo:
+        """Return one screen by numeric ID or UUID."""
         return await self._api.call("screens.get", {"screen_id": screen_id}, result_type=ScreenInfo)
 
     async def set_brightness(self, screen_id: str, brightness: float) -> None:
+        """Set a screen brightness value between 0 and 1."""
         if not 0 <= brightness <= 1:
             raise ValueError("brightness must be between 0 and 1")
         await self._api.call(
@@ -30,6 +37,7 @@ class ScreensClient:
     async def screenshot(
         self, screen_id: str | None = None, *, mode: ScreenshotMode = "inline"
     ) -> Screenshot:
+        """Capture a screen inline or as a host-local runtime file."""
         params: dict[str, object] = {"mode": mode}
         if screen_id is not None:
             params["screen_id"] = screen_id

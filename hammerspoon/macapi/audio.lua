@@ -1,9 +1,11 @@
+--- Default audio device inspection and output-control RPC service.
 local audio = require("hs.audiodevice")
 local validators = require("macapi.validators")
 local common = require("macapi.common")
 local protocol = require("macapi.protocol")
 local M = { methods = {} }
 
+--- Return default input/output device details.
 M.methods["audio.get"] = function()
     local output = audio.defaultOutputDevice()
     local input = audio.defaultInputDevice()
@@ -15,6 +17,7 @@ M.methods["audio.get"] = function()
     return result
 end
 
+--- Set default output volume in the inclusive range 0..100.
 M.methods["audio.setVolume"] = function(params)
     local volume, error = validators.required_number(params, "volume")
     if not volume then return nil, error end
@@ -25,6 +28,7 @@ M.methods["audio.setVolume"] = function(params)
     return nil
 end
 
+--- Set default output mute state.
 M.methods["audio.setMuted"] = function(params)
     local muted, error = validators.required_boolean(params, "muted")
     if muted == nil then return nil, error end

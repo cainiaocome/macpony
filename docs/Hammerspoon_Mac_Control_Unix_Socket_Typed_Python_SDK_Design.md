@@ -1,5 +1,9 @@
 # Hammerspoon Mac Control — Unix Domain Socket + Typed Python SDK Design
 
+> This document records the original design and acceptance criteria. For the
+> current implementation, setup instructions, API tables, event behavior, and
+> operational guidance, start with [`docs/README.md`](README.md).
+
 ## 1. Project Goal
 
 Build a local macOS control plane using:

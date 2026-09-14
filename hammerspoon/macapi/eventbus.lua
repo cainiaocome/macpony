@@ -1,3 +1,8 @@
+--- Subscription-aware event queue with coalescing and sequence assignment.
+---
+--- The bus is deliberately independent of the socket implementation. The
+--- server supplies a sender callback; failed sends leave the queued event for
+--- a later flush while a disconnected client is present.
 local hs_timer = require("hs.timer")
 local subscriptions = require("macapi.subscriptions")
 local config = require("macapi.config")
@@ -30,10 +35,12 @@ local function flush()
 end
 
 function M.init(sender)
+    --- Attach the current server sender callback.
     send_message = sender
 end
 
 function M.stop()
+    --- Cancel coalescing timers and discard queued events during shutdown.
     for key, timer in pairs(pending) do
         if key:sub(-6) == ":timer" and timer and timer.stop then timer:stop() end
     end
@@ -43,6 +50,7 @@ function M.stop()
 end
 
 function M.emit(name, data, options)
+    --- Queue a subscribed event, optionally coalescing high-frequency changes.
     if not subscriptions.matches(name) then return false end
     local payload = object_payload(data)
     if subscriptions.include_data(name) == false then payload = protocol.empty_object() end
@@ -84,6 +92,7 @@ function M.emit(name, data, options)
 end
 
 function M.flush()
+    --- Attempt to send queued events while exactly one client is connected.
     flush()
 end
 

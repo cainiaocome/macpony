@@ -1,3 +1,7 @@
+--- Window observation and positioning RPC service.
+---
+--- Window IDs are macOS-provided numeric identifiers. Position helpers use
+--- the target window's usable screen frame and never execute arbitrary code.
 local validators = require("macapi.validators")
 local common = require("macapi.common")
 local M = { methods = {} }
@@ -10,6 +14,7 @@ local function find(params)
     return window
 end
 
+--- Return all windows visible to Hammerspoon.
 M.methods["windows.list"] = function()
     local result = {}
     for _, window in ipairs(hs.window.allWindows()) do
@@ -18,11 +23,13 @@ M.methods["windows.list"] = function()
     return result
 end
 
+--- Return the focused window, if one exists.
 M.methods["windows.focused"] = function()
     local window = hs.window.focusedWindow()
     return window and common.window_info(window) or nil
 end
 
+--- Return one window by macOS window ID.
 M.methods["windows.get"] = function(params)
     local window, error = find(params)
     if not window then return nil, error end
@@ -36,28 +43,34 @@ local function action(params, callback)
     return nil
 end
 
+--- Focus a window by ID.
 M.methods["windows.focus"] = function(params)
     return action(params, function(window) window:focus() end)
 end
 
+--- Minimize a window by ID.
 M.methods["windows.minimize"] = function(params)
     return action(params, function(window) window:minimize() end)
 end
 
+--- Restore a minimized window by ID.
 M.methods["windows.unminimize"] = function(params)
     return action(params, function(window) window:unminimize() end)
 end
 
+--- Maximize a window by ID.
 M.methods["windows.maximize"] = function(params)
     return action(params, function(window) window:maximize() end)
 end
 
+--- Enable or disable fullscreen for a window.
 M.methods["windows.setFullscreen"] = function(params)
     local enabled, error = validators.required_boolean(params, "enabled")
     if enabled == nil then return nil, error end
     return action(params, function(window) window:setFullScreen(enabled) end)
 end
 
+--- Set an exact x/y/w/h frame after validating every coordinate.
 M.methods["windows.setFrame"] = function(params)
     local window, error = find(params)
     if not window then return nil, error end
@@ -93,6 +106,7 @@ local function position_frame(window, position)
     return result
 end
 
+--- Move a window to one of the supported relative positions.
 M.methods["windows.move"] = function(params)
     local window, error = find(params)
     if not window then return nil, error end
