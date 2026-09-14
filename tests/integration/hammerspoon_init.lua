@@ -5,4 +5,4 @@ package.path = home .. "/.hammerspoon/?.lua;" ..
     home .. "/.hammerspoon/?/init.lua;" .. package.path
 
 require("hs.ipc")
-require("macapi").start()
+require("macapi").server.start()
