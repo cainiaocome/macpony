@@ -1,0 +1,14 @@
+{
+  "typeCheckingMode": "strict",
+  "pythonVersion": "3.12",
+  "extraPaths": [
+    "python-client/src"
+  ],
+  "include": [
+    "python-client/src",
+    "tests/python"
+  ],
+  "exclude": [
+    "reference-repos"
+  ]
+}

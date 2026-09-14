@@ -1,0 +1,90 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  python:
+    name: Python ${{ matrix.python-version }} (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-14]
+        python-version: ['3.12', '3.13']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install package and tools
+        run: python -m pip install -e 'python-client[dev]'
+      - name: Ruff
+        run: |
+          ruff check .
+          ruff format --check .
+      - name: Pyright
+        run: pyright
+      - name: Unit tests
+        run: pytest tests/python
+      - name: Build package
+        run: python -m build python-client
+
+  lua:
+    name: Lua and Hammerspoon checks
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Lua syntax checker
+        run: brew install lua
+      - name: Lua syntax checks
+        run: make lua-check
+      - name: Install Python test dependencies
+        run: python3 -m pip install -e 'python-client[dev]'
+      - name: SDK tests on macOS
+        run: pytest tests/python
+
+  hammerspoon:
+    name: Hammerspoon socket smoke test
+    runs-on: macos-14
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install Hammerspoon and Python SDK
+        run: |
+          brew install --cask hammerspoon
+          python -m pip install -e 'python-client[dev]'
+      - name: Install Hammerspoon configuration
+        run: |
+          mkdir -p "$HOME/.hammerspoon"
+          cp tests/integration/hammerspoon_init.lua "$HOME/.hammerspoon/init.lua"
+          cp -R hammerspoon/macapi "$HOME/.hammerspoon/macapi"
+      - name: Launch Hammerspoon
+        run: |
+          open -a Hammerspoon
+          socket_path="$HOME/Library/Application Support/HammerspoonMacAPI/run/macapi.sock"
+          for attempt in $(seq 1 30); do
+            if [ -S "$socket_path" ]; then exit 0; fi
+            sleep 1
+          done
+          echo "Hammerspoon did not create $socket_path" >&2
+          find "$HOME/Library/Logs" -maxdepth 3 -type f -iname '*hammerspoon*' -print -exec tail -100 {} \; 2>/dev/null || true
+          exit 1
+      - name: Real Hammerspoon integration test
+        env:
+          RUN_HAMMERSPOON_INTEGRATION: '1'
+        run: pytest -q tests/integration -m hammerspoon
+      - name: Hammerspoon logs
+        if: failure()
+        run: |
+          find "$HOME/Library/Logs" -maxdepth 3 -type f -iname '*hammerspoon*' -print -exec tail -200 {} \; 2>/dev/null || true
+      - name: Stop Hammerspoon
+        if: always()
+        run: pkill -x Hammerspoon || true

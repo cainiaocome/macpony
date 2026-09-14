@@ -1,0 +1,8 @@
+from __future__ import annotations
+
+import sys
+from pathlib import Path
+
+PACKAGE_SRC = Path(__file__).parents[2] / "python-client" / "src"
+if str(PACKAGE_SRC) not in sys.path:
+    sys.path.insert(0, str(PACKAGE_SRC))
