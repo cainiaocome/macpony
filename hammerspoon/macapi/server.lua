@@ -123,6 +123,7 @@ function M.start()
                 debug("connection count " .. tostring(connection_count) .. " -> " .. tostring(connections))
                 connection_count = connections
                 read_pending = false
+                if connections == 0 then line_buffer = "" end
             end
         end
         read_next()
@@ -137,6 +138,7 @@ function M.status()
         connected = listener and listener:connected() or false,
         connections = listener and listener:connections() or 0,
         read_pending = read_pending,
+        buffered_bytes = #line_buffer,
     }
 end
 
