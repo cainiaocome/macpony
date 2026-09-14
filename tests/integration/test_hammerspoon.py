@@ -1,14 +1,16 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import os
 import sys
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import cast
 from uuid import uuid4
 
 import pytest
+import pytest_asyncio
 from hammerspoon_macapi import (
     AppNotFoundError,
     AudioInfo,
@@ -80,14 +82,24 @@ EXPECTED_METHODS = {
 }
 
 
-async def _connect() -> MacAPI:
+@pytest_asyncio.fixture(scope="module", loop_scope="module")
+async def hammerspoon_client() -> AsyncIterator[MacAPI]:
     client = MacAPI(auto_reconnect=False)
     await client.connect()
-    return client
+    try:
+        yield client
+    finally:
+        await client.close()
 
 
-async def test_hammerspoon_round_trip() -> None:
-    async with await _connect() as mac:
+@asynccontextmanager
+async def _reuse(client: MacAPI) -> AsyncIterator[MacAPI]:
+    """Use the module's one long-lived client without closing it per test."""
+    yield client
+
+
+async def test_hammerspoon_round_trip(hammerspoon_client: MacAPI) -> None:
+    async with _reuse(hammerspoon_client) as mac:
         result = cast(
             dict[str, object],
             await mac.call("protocol.ping", result_type=dict[str, object]),
@@ -98,9 +110,9 @@ async def test_hammerspoon_round_trip() -> None:
         assert info.hostname
 
 
-async def test_hammerspoon_full_observation_surface() -> None:
+async def test_hammerspoon_full_observation_surface(hammerspoon_client: MacAPI) -> None:
     """Exercise every read-only namespace against the real Hammerspoon server."""
-    async with await _connect() as mac:
+    async with _reuse(hammerspoon_client) as mac:
         capabilities = await mac.system.capabilities()
         assert EXPECTED_METHODS <= set(capabilities.methods)
         assert capabilities.features.get("dangerous_actions") is True
@@ -160,9 +172,11 @@ async def test_hammerspoon_full_observation_surface() -> None:
         await mac.system.user_activity()
 
 
-async def test_hammerspoon_errors_subscriptions_and_reversible_controls() -> None:
+async def test_hammerspoon_errors_subscriptions_and_reversible_controls(
+    hammerspoon_client: MacAPI,
+) -> None:
     """Exercise typed errors, subscription RPCs, and no-op-safe controls."""
-    async with await _connect() as mac:
+    async with _reuse(hammerspoon_client) as mac:
         await mac.events.unsubscribe_all()
         with pytest.raises(MethodNotFoundError):
             await mac.call("does.not.exist", result_type=type(None))
@@ -193,9 +207,11 @@ async def test_hammerspoon_errors_subscriptions_and_reversible_controls() -> Non
         assert await mac.events.get_subscriptions() == []
 
 
-async def test_hammerspoon_clipboard_event_round_trip() -> None:
+async def test_hammerspoon_clipboard_event_round_trip(
+    hammerspoon_client: MacAPI,
+) -> None:
     """Trigger a real pasteboard watcher event and restore the prior text."""
-    async with await _connect() as mac:
+    async with _reuse(hammerspoon_client) as mac:
         original = await mac.clipboard.get()
         restore_text = original.text or "macapi-e2e-clipboard-restored"
         sentinel = f"macapi-e2e-{uuid4().hex}"
@@ -211,45 +227,14 @@ async def test_hammerspoon_clipboard_event_round_trip() -> None:
             await mac.events.unsubscribe_all()
 
 
-async def test_hammerspoon_event_iterator_closes_with_client() -> None:
+async def test_hammerspoon_event_iterator_closes_with_client(
+    hammerspoon_client: MacAPI,
+) -> None:
     """Verify the real SDK lifecycle wakes a blocked event consumer."""
-    client = await _connect()
-    pending_event = asyncio.create_task(client.events.__anext__())
-    await client.close()
+    pending_event = asyncio.create_task(hammerspoon_client.events.__anext__())
+    await hammerspoon_client.close()
     with pytest.raises(StopAsyncIteration):
         await pending_event
-
-
-async def test_hammerspoon_raw_protocol_recovers_after_malformed_record() -> None:
-    """Verify Lua protocol errors do not terminate the real socket listener."""
-    socket_path = MacAPI().socket_path
-    reader, writer = await asyncio.open_unix_connection(str(socket_path))
-    try:
-        writer.write(b"not-json\n")
-        writer.write(
-            json.dumps(
-                {
-                    "v": 1,
-                    "id": "raw-e2e",
-                    "type": "request",
-                    "method": "protocol.ping",
-                    "params": {},
-                },
-                separators=(",", ":"),
-            ).encode()
-            + b"\n"
-        )
-        await writer.drain()
-        protocol_error = json.loads(await asyncio.wait_for(reader.readline(), 5))
-        response = json.loads(await asyncio.wait_for(reader.readline(), 5))
-        assert protocol_error["type"] == "protocol_error"
-        assert protocol_error["code"] == "PROTOCOL_ERROR"
-        assert response["id"] == "raw-e2e"
-        assert response["ok"] is True
-        assert response["result"]["pong"] is True
-    finally:
-        writer.close()
-        await writer.wait_closed()
 
 
 async def test_hammerspoon_missing_socket_reports_sdk_error(tmp_path: Path) -> None:

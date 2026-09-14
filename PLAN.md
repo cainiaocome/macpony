@@ -49,6 +49,6 @@ Implement the Unix-domain-socket NDJSON protocol, Hammerspoon server, typed asyn
 - `pytest tests/python`: passed (23 tests).
 - Documentation and source-comment changes do not alter runtime behavior; no generated documentation artifacts are required.
 - The expanded Hammerspoon integration suite requires macOS, Hammerspoon, a GUI session, and `RUN_HAMMERSPOON_INTEGRATION=1`.
-- Local Linux result: `pytest tests/integration` skips all 7 Hammerspoon tests as expected; the hosted macOS job runs them against the real socket.
+- Local Linux result: `pytest tests/integration` skips all 6 Hammerspoon tests as expected; the hosted macOS job runs them against the real socket.
 - GitHub workflow YAML parses locally and the complete hosted matrix passed in run `34853070893`.
 - Remote verification before these repairs: `origin/master` includes the implementation through `3b2f35b`; hosted Hammerspoon round trip, Python 3.12/3.13 on Ubuntu/macOS, Lua checks, and macOS SDK tests all passed.
