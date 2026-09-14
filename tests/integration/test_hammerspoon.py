@@ -231,6 +231,13 @@ async def test_hammerspoon_event_iterator_closes_with_client(
     hammerspoon_client: MacAPI,
 ) -> None:
     """Verify the real SDK lifecycle wakes a blocked event consumer."""
+    while True:
+        try:
+            await asyncio.wait_for(hammerspoon_client.events.__anext__(), 0.05)
+        except asyncio.TimeoutError:
+            break
+        except StopAsyncIteration:
+            break
     pending_event = asyncio.create_task(hammerspoon_client.events.__anext__())
     await hammerspoon_client.close()
     with pytest.raises(StopAsyncIteration):
