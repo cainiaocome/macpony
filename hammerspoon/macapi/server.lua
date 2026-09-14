@@ -13,6 +13,9 @@ local read_pending = false
 local connection_count = 0
 local line_buffer = ""
 local read_callbacks = 0
+local requests_decoded = 0
+local responses_written = 0
+local protocol_errors = 0
 local TAG_BYTE = 1
 local debug_enabled = os.getenv("MACAPI_DEBUG") == "1"
 
@@ -54,6 +57,7 @@ local function send(message)
         hs.printf("macapi socket write error: %s", tostring(write_error))
         return false
     end
+    responses_written = responses_written + 1
     debug("response/event written")
     return true
 end
@@ -102,10 +106,12 @@ local function callback(data, tag)
     line_buffer = ""
     local request, error = protocol.decode(line)
     if not request then
+        protocol_errors = protocol_errors + 1
         hs.printf("macapi protocol error: %s", tostring(error))
         read_next()
         return
     end
+    requests_decoded = requests_decoded + 1
     dispatcher.handle(request, respond)
     eventbus.flush()
     read_next()
@@ -142,6 +148,9 @@ function M.status()
         read_pending = read_pending,
         buffered_bytes = #line_buffer,
         read_callbacks = read_callbacks,
+        requests_decoded = requests_decoded,
+        responses_written = responses_written,
+        protocol_errors = protocol_errors,
     }
 end
 
@@ -152,6 +161,9 @@ function M.stop()
     connection_count = 0
     line_buffer = ""
     read_callbacks = 0
+    requests_decoded = 0
+    responses_written = 0
+    protocol_errors = 0
     listener:disconnect()
     listener = nil
     local attributes = fs.attributes(config.socket_path)
