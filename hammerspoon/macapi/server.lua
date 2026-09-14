@@ -16,6 +16,8 @@ local read_callbacks = 0
 local requests_decoded = 0
 local responses_written = 0
 local protocol_errors = 0
+local last_protocol_error = ""
+local last_line = ""
 local TAG_BYTE = 1
 local debug_enabled = os.getenv("MACAPI_DEBUG") == "1"
 
@@ -104,9 +106,11 @@ local function callback(data, tag)
     end
     local line = line_buffer
     line_buffer = ""
+    last_line = line
     local request, error = protocol.decode(line)
     if not request then
         protocol_errors = protocol_errors + 1
+        last_protocol_error = tostring(error)
         hs.printf("macapi protocol error: %s", tostring(error))
         read_next()
         return
@@ -151,6 +155,8 @@ function M.status()
         requests_decoded = requests_decoded,
         responses_written = responses_written,
         protocol_errors = protocol_errors,
+        last_protocol_error = last_protocol_error,
+        last_line = last_line,
     }
 end
 
@@ -164,6 +170,8 @@ function M.stop()
     requests_decoded = 0
     responses_written = 0
     protocol_errors = 0
+    last_protocol_error = ""
+    last_line = ""
     listener:disconnect()
     listener = nil
     local attributes = fs.attributes(config.socket_path)
