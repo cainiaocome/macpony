@@ -1,15 +1,18 @@
 local audio = require("hs.audiodevice")
 local validators = require("macapi.validators")
 local common = require("macapi.common")
+local protocol = require("macapi.protocol")
 local M = { methods = {} }
 
 M.methods["audio.get"] = function()
     local output = audio.defaultOutputDevice()
     local input = audio.defaultInputDevice()
-    return {
+    local result = {
         output = output and { name = output:name(), volume = output:volume(), muted = output:muted() } or nil,
         input = input and { name = input:name() } or nil,
     }
+    if not output and not input then return protocol.empty_object() end
+    return result
 end
 
 M.methods["audio.setVolume"] = function(params)

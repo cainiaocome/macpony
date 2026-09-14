@@ -8,12 +8,14 @@ from pathlib import Path
 import pytest
 import pytest_asyncio
 from hammerspoon_macapi import (
+    ConnectionError,
     ConnectionLostError,
     MacAPI,
     MacEvent,
     RPCTimeoutError,
     WindowFocusedEvent,
 )
+from hammerspoon_macapi.exceptions import ProtocolError
 from hammerspoon_macapi.models import ApplicationInfo, SystemInfo, WindowInfo
 
 from .fake_server import FakeMacAPIServer
@@ -87,6 +89,15 @@ async def test_concurrent_out_of_order_rpc_responses(
 
 
 @pytest.mark.asyncio
+async def test_missing_socket_is_reported_as_sdk_connection_error(
+    tmp_path: Path,
+) -> None:
+    client = MacAPI(tmp_path / "missing.sock", auto_reconnect=False)
+    with pytest.raises(ConnectionError):
+        await client.connect()
+
+
+@pytest.mark.asyncio
 async def test_event_interleaves_with_rpc(fake_server: FakeMacAPIServer) -> None:
     client = await connected_client(fake_server)
     try:
@@ -140,6 +151,23 @@ async def test_event_callback_handler_receives_typed_event(
 
 
 @pytest.mark.asyncio
+async def test_event_queue_drops_oldest_item_when_full(
+    fake_server: FakeMacAPIServer,
+) -> None:
+    client = MacAPI(fake_server.path, auto_reconnect=False, event_queue_size=1)
+    await client.connect()
+    try:
+        await fake_server.send_event("window.focused", {"window_id": 1}, seq=1)
+        await fake_server.send_event("window.focused", {"window_id": 2}, seq=2)
+        event = await asyncio.wait_for(client.events.__anext__(), 1)
+        assert isinstance(event, WindowFocusedEvent)
+        assert event.data.window_id == 2
+        assert client.events.dropped_events == 1
+    finally:
+        await client.close()
+
+
+@pytest.mark.asyncio
 async def test_subscription_is_restored_after_reconnect(
     fake_server: FakeMacAPIServer,
 ) -> None:
@@ -184,6 +212,24 @@ async def test_subscription_is_restored_after_reconnect(
         await asyncio.wait_for(client.wait_until_connected(), 2)
         assert client.connected
         assert client.events.subscriptions[0].event == "window.*"
+
+        info_task = asyncio.create_task(client.system.info())
+        info_request = await fake_server.wait_for_method("system.info", timeout=2)
+        await fake_server.send_response(
+            str(info_request["id"]),
+            {
+                "hostname": "reconnected",
+                "os": {"name": "macOS", "version": "1"},
+                "addresses": [],
+            },
+        )
+        assert (await info_task).hostname == "reconnected"
+        await fake_server.send_event(
+            "window.focused", {"window_id": 7, "title": "after reconnect"}, seq=2
+        )
+        event = await asyncio.wait_for(client.events.__anext__(), 2)
+        assert isinstance(event, WindowFocusedEvent)
+        assert event.data.window_id == 7
     finally:
         await client.close()
 
@@ -207,6 +253,91 @@ async def test_timeout_removes_pending_rpc(fake_server: FakeMacAPIServer) -> Non
     try:
         with pytest.raises(RPCTimeoutError):
             await client.call("system.info", result_type=SystemInfo, timeout=0.02)
+    finally:
+        await client.close()
+
+
+@pytest.mark.asyncio
+async def test_malformed_line_does_not_disconnect_reader(
+    fake_server: FakeMacAPIServer,
+) -> None:
+    client = await connected_client(fake_server)
+    try:
+        await fake_server.send_raw(b"not-json\n")
+        task = asyncio.create_task(client.system.info())
+        request = await fake_server.wait_for_method("system.info")
+        await fake_server.send_response(
+            str(request["id"]),
+            {
+                "hostname": "test",
+                "os": {"name": "macOS", "version": "1"},
+                "addresses": [],
+            },
+        )
+        assert (await task).hostname == "test"
+    finally:
+        await client.close()
+
+
+@pytest.mark.asyncio
+async def test_protocol_error_only_fails_correlated_rpc(
+    fake_server: FakeMacAPIServer,
+) -> None:
+    client = await connected_client(fake_server)
+    try:
+        task = asyncio.create_task(client.system.info())
+        request = await fake_server.wait_for_method("system.info")
+        await fake_server.send_raw(
+            (
+                '{"v":1,"type":"protocol_error","id":"'
+                + str(request["id"])
+                + '","code":"PROTOCOL_ERROR","message":"bad request"}\n'
+            ).encode()
+        )
+        with pytest.raises(ProtocolError):
+            await task
+        follow_up = asyncio.create_task(client.system.info())
+        request = await fake_server.wait_for_method("system.info")
+        await fake_server.send_response(
+            str(request["id"]),
+            {
+                "hostname": "test",
+                "os": {"name": "macOS", "version": "1"},
+                "addresses": [],
+            },
+        )
+        assert (await follow_up).hostname == "test"
+    finally:
+        await client.close()
+
+
+@pytest.mark.asyncio
+async def test_event_iterator_terminates_when_auto_reconnect_is_disabled(
+    fake_server: FakeMacAPIServer,
+) -> None:
+    client = await connected_client(fake_server)
+    try:
+        next_event = asyncio.create_task(client.events.__anext__())
+        await asyncio.sleep(0)
+        await fake_server.close_client()
+        with pytest.raises(StopAsyncIteration):
+            await asyncio.wait_for(next_event, 1)
+    finally:
+        await client.close()
+
+
+@pytest.mark.asyncio
+async def test_cancelled_rpc_is_removed_from_pending_requests(
+    fake_server: FakeMacAPIServer,
+) -> None:
+    client = await connected_client(fake_server)
+    try:
+        task = asyncio.create_task(client.system.info())
+        await fake_server.wait_for_method("system.info")
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        assert client.pending_requests == 0
     finally:
         await client.close()
 

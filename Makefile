@@ -39,4 +39,5 @@ check:
 
 lua-check:
 	@command -v luac >/dev/null || { echo "luac is not installed; skipping Lua syntax check"; exit 0; }; \
-	find hammerspoon tests/lua -name '*.lua' -print0 | xargs -0 -n1 luac -p
+	find hammerspoon tests/lua -name '*.lua' -print0 | xargs -0 -n1 luac -p; \
+	if command -v lua >/dev/null; then lua tests/lua/test_module_layout.lua; else echo "lua is not installed; skipping Lua behavior tests"; fi

@@ -3,11 +3,22 @@ from __future__ import annotations
 import base64
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class Model(BaseModel):
     model_config = ConfigDict(extra="ignore")
+
+    @model_validator(mode="before")
+    @classmethod
+    def _decode_empty_object_compatibility(cls, value: object) -> object:
+        """Accept Lua JSON's legacy representation of an empty object.
+
+        Hammerspoon's JSON encoder can emit an empty Lua table as ``[]``.
+        Object-shaped API results and event payloads are normalized here so a
+        client remains compatible with an older or partially upgraded server.
+        """
+        return {} if value == [] else value
 
 
 class Frame(Model):

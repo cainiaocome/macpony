@@ -9,7 +9,8 @@ M.run_dir = root .. "/run"
 M.socket_path = os.getenv("MACAPI_SOCKET_PATH") or (M.run_dir .. "/macapi.sock")
 M.protocol_version = 1
 M.server_version = "0.1.0"
-M.max_line_bytes = 1024 * 1024
+M.max_line_bytes = 16 * 1024 * 1024
+M.max_inline_screenshot_bytes = M.max_line_bytes - 4096
 M.max_queue_size = 256
 M.event_coalesce_ms = 75
 M.dangerous_actions_enabled = os.getenv("MACAPI_ENABLE_DANGEROUS_ACTIONS") == "1"

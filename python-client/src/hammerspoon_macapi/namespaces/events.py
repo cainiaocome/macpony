@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from pydantic import BaseModel, ConfigDict
 
@@ -16,6 +16,7 @@ if TYPE_CHECKING:
 
 type EventHandler = Callable[[MacEvent], Awaitable[None]]
 logger = logging.getLogger("hammerspoon_macapi")
+_EVENTS_CLOSED = object()
 
 
 class EventSubscription(BaseModel):
@@ -28,19 +29,27 @@ class EventSubscription(BaseModel):
 class EventsClient(AsyncIterator[MacEvent]):
     def __init__(self, api: MacAPI, queue_size: int = DEFAULT_EVENT_QUEUE_SIZE) -> None:
         self._api = api
-        self._queue: asyncio.Queue[MacEvent] = asyncio.Queue(maxsize=queue_size)
+        self._queue: asyncio.Queue[MacEvent | object] = asyncio.Queue(maxsize=queue_size)
         self._subscriptions: list[EventSubscription] = []
         self._handlers: set[EventHandler] = set()
         self._handler_tasks: set[asyncio.Task[None]] = set()
         self.dropped_events = 0
+        self._closed = False
 
     def __aiter__(self) -> EventsClient:
         return self
 
     async def __anext__(self) -> MacEvent:
-        return await self._queue.get()
+        item = await self._queue.get()
+        if item is _EVENTS_CLOSED:
+            # Keep the terminal marker available to concurrent consumers.
+            self._queue.put_nowait(_EVENTS_CLOSED)
+            raise StopAsyncIteration
+        return cast(MacEvent, item)
 
     async def on_event(self, event: MacEvent) -> None:
+        if self._closed:
+            return
         if self._queue.full():
             self._queue.get_nowait()
             self.dropped_events += 1
@@ -58,6 +67,9 @@ class EventsClient(AsyncIterator[MacEvent]):
         self._handlers.discard(handler)
 
     async def close(self) -> None:
+        if self._closed:
+            return
+        self._closed = True
         tasks = tuple(self._handler_tasks)
         for task in tasks:
             task.cancel()
@@ -67,6 +79,13 @@ class EventsClient(AsyncIterator[MacEvent]):
             except asyncio.CancelledError:
                 pass
         self._handler_tasks.clear()
+        self._wake_iterator()
+
+    def _wake_iterator(self) -> None:
+        if self._queue.full():
+            self._queue.get_nowait()
+            self.dropped_events += 1
+        self._queue.put_nowait(_EVENTS_CLOSED)
 
     @staticmethod
     async def _run_handler(handler: EventHandler, event: MacEvent) -> None:

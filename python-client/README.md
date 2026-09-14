@@ -23,3 +23,6 @@ asyncio.run(main())
 
 The SDK uses one persistent Unix domain socket and NDJSON framing. The default
 socket is `~/Library/Application Support/HammerspoonMacAPI/run/macapi.sock`.
+Records are bounded at 16 MiB. The event queue is bounded with oldest-item
+drop behavior, reported by `MacAPI.events.dropped_events`; a non-reconnecting
+event iterator terminates when its socket closes.

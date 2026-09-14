@@ -23,9 +23,14 @@ The server listens only on:
 
 The runtime directory is mode `0700` and the socket is mode `0600`. Version 1
 allows one client and has no application-level authentication because filesystem
-permissions are the trust boundary. Locking the screen, quitting apps, and
-keyboard/mouse injection are disabled by default; explicitly set
+permissions are the trust boundary. Locking the screen, starting the
+screensaver, quitting apps, and keyboard/mouse injection are disabled by
+default; explicitly set
 `MACAPI_ENABLE_DANGEROUS_ACTIONS=1` in Hammerspoon's environment to enable them.
+
+NDJSON records are bounded at 16 MiB. Inline PNG screenshots have the same
+bounded transport and return `SCREENSHOT_TOO_LARGE` when the encoded image does
+not fit; use screenshot `mode="file"` for larger captures.
 
 ## Use the typed Python SDK
 
@@ -62,6 +67,10 @@ asyncio.run(main())
 With `auto_reconnect=True`, a Hammerspoon reload fails in-flight RPCs safely,
 re-negotiates capabilities, restores successful event subscriptions, and keeps
 the event iterator usable.
+
+The local event queue is bounded and drops its oldest item when full;
+`mac.events.dropped_events` counts those drops. With `auto_reconnect=False`,
+the async event iterator terminates when the socket closes.
 
 Known server errors are typed:
 

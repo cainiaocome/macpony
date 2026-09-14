@@ -153,6 +153,14 @@ class FakeMacAPIServer:
             target.write(json.dumps(payload, separators=(",", ":")).encode() + b"\n")
             await target.drain()
 
+    async def send_raw(self, payload: bytes) -> None:
+        target = self._writer
+        if target is None:
+            raise RuntimeError("fake server has no connected client")
+        async with self._write_lock:
+            target.write(payload)
+            await target.drain()
+
     async def close_client(self) -> None:
         writer = self._writer
         if writer is None:

@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
-from collections.abc import Awaitable, Callable, Mapping
+from collections.abc import AsyncIterator, Awaitable, Callable, Mapping
 from enum import StrEnum
 from pathlib import Path
 from typing import TypeVar, cast, overload
@@ -48,6 +48,7 @@ class ConnectionState(StrEnum):
 
 EventHandler = Callable[[MacEvent], Awaitable[None]]
 ConnectedHandler = Callable[[], Awaitable[None]]
+DisconnectedHandler = Callable[[], Awaitable[None]]
 
 
 class SocketConnection:
@@ -59,6 +60,7 @@ class SocketConnection:
         *,
         on_event: EventHandler,
         on_connected: ConnectedHandler,
+        on_disconnected: DisconnectedHandler,
         auto_reconnect: bool = True,
         reconnect_min_delay: float = DEFAULT_RECONNECT_MIN_DELAY,
         reconnect_max_delay: float = DEFAULT_RECONNECT_MAX_DELAY,
@@ -69,6 +71,7 @@ class SocketConnection:
         self.reconnect_max_delay = reconnect_max_delay
         self._on_event = on_event
         self._on_connected = on_connected
+        self._on_disconnected = on_disconnected
         self._reader: asyncio.StreamReader | None = None
         self._writer: asyncio.StreamWriter | None = None
         self._reader_task: asyncio.Task[None] | None = None
@@ -88,6 +91,10 @@ class SocketConnection:
     @property
     def connected(self) -> bool:
         return self._state == ConnectionState.CONNECTED
+
+    @property
+    def pending_count(self) -> int:
+        return len(self._pending)
 
     async def connect(self) -> None:
         """Make the initial connection, failing fast if the socket is unavailable."""
@@ -180,6 +187,9 @@ class SocketConnection:
         effective_timeout = DEFAULT_RPC_TIMEOUT if timeout is None else timeout
         try:
             response = await asyncio.wait_for(asyncio.shield(future), effective_timeout)
+        except asyncio.CancelledError:
+            self._pending.pop(request_id, None)
+            raise
         except TimeoutError as exc:
             self._pending.pop(request_id, None)
             raise RPCTimeoutError(method, effective_timeout) from exc
@@ -194,9 +204,12 @@ class SocketConnection:
         return parse_result(response.result, result_type)
 
     async def _connect_once(self) -> None:
-        reader, writer = await asyncio.open_unix_connection(
-            str(self.socket_path), limit=MAX_LINE_BYTES + 1
-        )
+        try:
+            reader, writer = await asyncio.open_unix_connection(
+                str(self.socket_path), limit=MAX_LINE_BYTES + 1
+            )
+        except OSError as exc:
+            raise ConnectionError(f"unable to connect to {self.socket_path}: {exc}") from exc
         self._reader = reader
         self._writer = writer
         self._reader_task = asyncio.create_task(self._reader_loop(), name="macapi-reader")
@@ -209,14 +222,15 @@ class SocketConnection:
 
     async def _reader_loop(self) -> None:
         try:
-            while True:
-                reader = self._reader
-                if reader is None:
-                    return
-                line = await reader.readline()
-                if not line:
-                    raise ConnectionLostError("peer closed the Unix socket")
-                message = decode_message(line)
+            reader = self._reader
+            if reader is None:
+                return
+            async for line in self._iter_lines(reader):
+                try:
+                    message = decode_message(line)
+                except ProtocolError as exc:
+                    logger.warning("ignoring malformed protocol line: %s", exc)
+                    continue
                 if isinstance(message, ResponseEnvelope):
                     future = self._pending.pop(message.id, None)
                     if future is None:
@@ -226,18 +240,56 @@ class SocketConnection:
                 elif isinstance(message, RawEvent):
                     try:
                         event = parse_event(message)
-                    except ValueError as exc:
-                        raise ProtocolError(f"invalid event payload: {exc}") from exc
+                    except (TypeError, ValueError) as exc:
+                        logger.warning("ignoring invalid event payload: %s", exc)
+                        continue
                     await self._on_event(event)
                 else:
                     assert isinstance(message, ProtocolErrorEnvelope)
-                    raise ProtocolError(f"server protocol error {message.code}: {message.message}")
+                    error = ProtocolError(
+                        f"server protocol error {message.code}: {message.message}"
+                    )
+                    if message.id is not None:
+                        future = self._pending.pop(message.id, None)
+                        if future is not None and not future.done():
+                            future.set_exception(error)
+                    else:
+                        logger.warning("server protocol error: %s", error)
         except asyncio.CancelledError:
             raise
-        except (ConnectionLostError, OSError, ProtocolError, MacAPIError, ValueError) as exc:
+        except (ConnectionLostError, OSError, MacAPIError, ValueError) as exc:
             await self._handle_disconnect(
                 exc if isinstance(exc, ConnectionLostError) else ConnectionLostError(str(exc))
             )
+
+    @staticmethod
+    async def _iter_lines(reader: asyncio.StreamReader) -> AsyncIterator[bytes]:
+        """Yield bounded NDJSON records without letting one bad line kill the reader."""
+        buffer = bytearray()
+        dropping = False
+        while True:
+            chunk = await reader.read(4096)
+            if not chunk:
+                raise ConnectionLostError("peer closed the Unix socket")
+            buffer.extend(chunk)
+            while True:
+                newline = buffer.find(b"\n")
+                if newline < 0:
+                    if not dropping and len(buffer) > MAX_LINE_BYTES:
+                        logger.warning("discarding oversized protocol line")
+                        buffer.clear()
+                        dropping = True
+                    break
+                line = bytes(buffer[: newline + 1])
+                del buffer[: newline + 1]
+                if dropping:
+                    dropping = False
+                    logger.warning("discarded oversized protocol line")
+                    continue
+                if len(line) > MAX_LINE_BYTES:
+                    logger.warning("discarding oversized protocol line")
+                    continue
+                yield line
 
     async def _handle_disconnect(self, error: ConnectionLostError) -> None:
         if self._closing:
@@ -252,6 +304,7 @@ class SocketConnection:
                 )
         else:
             self._set_state(ConnectionState.DISCONNECTED)
+            await self._on_disconnected()
 
     async def _reconnect_loop(self) -> None:
         delay = self.reconnect_min_delay

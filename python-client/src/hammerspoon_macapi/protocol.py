@@ -64,7 +64,8 @@ def encode_line(message: BaseModel) -> bytes:
 
 
 def decode_message(line: bytes | str) -> WireMessage:
-    if len(line) > MAX_LINE_BYTES:
+    line_size = len(line) if isinstance(line, bytes) else len(line.encode("utf-8"))
+    if line_size > MAX_LINE_BYTES:
         raise ProtocolError("protocol message exceeds maximum line size")
     try:
         payload: object = json.loads(line)
@@ -79,6 +80,8 @@ def decode_message(line: bytes | str) -> WireMessage:
         if message_type == "response":
             return ResponseEnvelope.model_validate(payload)
         if message_type == "event":
+            if payload.get("data") == []:
+                payload["data"] = {}
             return RawEvent.model_validate(payload)
         if message_type == "protocol_error":
             return ProtocolErrorEnvelope.model_validate(payload)

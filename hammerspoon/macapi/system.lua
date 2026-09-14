@@ -3,6 +3,7 @@ local caffeinate = require("hs.caffeinate")
 local battery = require("hs.battery")
 local config = require("macapi.config")
 local common = require("macapi.common")
+local state = require("macapi.state")
 local M = { methods = {} }
 local capabilities_provider = function() return {} end
 
@@ -44,9 +45,9 @@ end
 
 M.methods["system.status"] = function()
     return {
-        locked = false,
-        screensaver = caffeinate.get("screenSaver"),
-        sleeping = false,
+        locked = state.locked,
+        screensaver = state.screensaver,
+        sleeping = state.sleeping,
         power_source = battery.powerSourceType(),
         battery_percent = battery.percentage(),
     }
@@ -66,7 +67,11 @@ M.methods["system.lock"] = function()
 end
 
 M.methods["system.screensaver"] = function()
+    if not config.dangerous_actions_enabled then
+        return common.error("FEATURE_DISABLED", "system.screensaver is disabled by configuration")
+    end
     caffeinate.startScreensaver()
+    state.screensaver = true
     return nil
 end
 

@@ -147,10 +147,10 @@ Every protocol message ends in:
 \n
 ```
 
-Hammerspoon can use delimiter reads:
+Hammerspoon can use bounded byte reads and assemble records until the newline:
 
 ```lua
-server:read("\n", TAG_MESSAGE)
+server:read(1, TAG_BYTE)
 ```
 
 Python can use:
@@ -158,6 +158,10 @@ Python can use:
 ```python
 line = await reader.readline()
 ```
+
+The server and SDK reject or discard records larger than 16 MiB without
+tearing down an otherwise healthy connection. This leaves room for inline PNG
+screenshots while keeping the stream bounded.
 
 This keeps framing simple on both sides.
 
@@ -1870,8 +1874,10 @@ system.sessionUnlocked
 wifi.changed
 
 audio.outputChanged
+audio.inputChanged
 audio.volumeChanged
 audio.muteChanged
+audio.deviceChanged
 
 clipboard.changed
 

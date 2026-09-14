@@ -2,11 +2,13 @@ local application_watcher = require("hs.application.watcher")
 local battery = require("hs.battery")
 local eventbus = require("macapi.eventbus")
 local common = require("macapi.common")
+local state = require("macapi.state")
 
 local M = {}
 local watchers = {}
 local previous_frames = {}
 local known_screens = {}
+local clipboard_active = false
 
 local function window_event_data(window, enabled)
     local info = common.window_info(window)
@@ -104,7 +106,21 @@ function M.start()
     }
     watchers.caffeinate = caffeinate.watcher.new(function(event)
         local name = caffeinate_events[event]
-        if name then eventbus.emit(name, {}) end
+        if name then
+            if event == caffeinate.watcher.systemWillSleep then state.sleeping = true end
+            if event == caffeinate.watcher.systemDidWake then state.sleeping = false end
+            if event == caffeinate.watcher.screensDidSleep then
+                state.screens_sleeping = true
+                state.screensaver = true
+            end
+            if event == caffeinate.watcher.screensDidWake then
+                state.screens_sleeping = false
+                state.screensaver = false
+            end
+            if event == caffeinate.watcher.screensDidLock then state.locked = true end
+            if event == caffeinate.watcher.screensDidUnlock then state.locked = false end
+            eventbus.emit(name, {})
+        end
     end):start()
 
     local wifi = require("hs.wifi")
@@ -118,12 +134,38 @@ function M.start()
     end):watchingFor({ "SSIDChange", "linkChange" }):start()
 
     local audio = require("hs.audiodevice")
+    local function refresh_audio_devices()
+        if watchers.audio_devices then
+            for _, device in ipairs(watchers.audio_devices) do
+                pcall(function() device:watcherStop() end)
+            end
+        end
+        watchers.audio_devices = {}
+        local function audio_device_callback(_, event)
+            if event == "vmvc" then
+                eventbus.emit("audio.volumeChanged", {}, { coalesce = true })
+            elseif event == "mute" then
+                eventbus.emit("audio.muteChanged", {}, { coalesce = true })
+            end
+        end
+        for _, device in ipairs({ audio.defaultOutputDevice(), audio.defaultInputDevice() }) do
+            if device then
+                device:watcherCallback(audio_device_callback):watcherStart()
+                table.insert(watchers.audio_devices, device)
+            end
+        end
+    end
     audio.watcher.setCallback(function(event)
-        if event:match("dOut") then eventbus.emit("audio.outputChanged", {})
-        elseif event:match("dIn") then eventbus.emit("audio.inputChanged", {})
+        if event:match("dOut") then
+            eventbus.emit("audio.outputChanged", {})
+            refresh_audio_devices()
+        elseif event:match("dIn") then
+            eventbus.emit("audio.inputChanged", {})
+            refresh_audio_devices()
         else eventbus.emit("audio.deviceChanged", { event = event }) end
     end)
     audio.watcher.start()
+    refresh_audio_devices()
 
     if battery.watcher then
         local previous_power_source = battery.powerSourceType()
@@ -140,14 +182,25 @@ function M.start()
         end):start()
     end
 
+    clipboard_active = true
     local function clipboard_callback(changed)
+        if not clipboard_active then return end
         if changed then eventbus.emit("clipboard.changed", { text = hs.pasteboard.getContents() }) end
-        hs.pasteboard.callbackWhenChanged(2, clipboard_callback)
+        if clipboard_active then hs.pasteboard.callbackWhenChanged(2, clipboard_callback) end
     end
     hs.pasteboard.callbackWhenChanged(2, clipboard_callback)
 end
 
 function M.stop()
+    clipboard_active = false
+    if watchers.windows and watchers.windows.unsubscribeAll then
+        pcall(function() watchers.windows:unsubscribeAll() end)
+    end
+    if watchers.audio_devices then
+        for _, device in ipairs(watchers.audio_devices) do
+            pcall(function() device:watcherStop() end)
+        end
+    end
     for _, watcher in pairs(watchers) do
         if watcher and watcher.stop then pcall(function() watcher:stop() end) end
     end
@@ -156,6 +209,7 @@ function M.stop()
     audio.watcher.setCallback(nil)
     previous_frames = {}
     known_screens = {}
+    state.reset()
     watchers = {}
 end
 

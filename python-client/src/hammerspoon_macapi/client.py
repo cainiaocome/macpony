@@ -10,7 +10,7 @@ from .constants import (
     DEFAULT_RECONNECT_MIN_DELAY,
     DEFAULT_SOCKET_PATH,
 )
-from .exceptions import ProtocolVersionError
+from .exceptions import ProtocolVersionError, ServerCapabilityError
 from .models import Capabilities
 from .namespaces import (
     AppsClient,
@@ -54,6 +54,7 @@ class MacAPI:
             self.socket_path,
             on_event=self.events.on_event,
             on_connected=self._on_connected,
+            on_disconnected=self.events.close,
             auto_reconnect=auto_reconnect,
             reconnect_min_delay=reconnect_min_delay,
             reconnect_max_delay=reconnect_max_delay,
@@ -66,6 +67,11 @@ class MacAPI:
     @property
     def connected(self) -> bool:
         return self._connection.connected
+
+    @property
+    def pending_requests(self) -> int:
+        """Number of RPCs currently awaiting a response."""
+        return self._connection.pending_count
 
     async def connect(self) -> None:
         await self._connection.connect()
@@ -124,6 +130,6 @@ class MacAPI:
         if capabilities.protocol_version != 1:
             raise ProtocolVersionError(1, capabilities.protocol_version)
         if not capabilities.single_client:
-            raise ProtocolVersionError(1, capabilities.protocol_version)
+            raise ServerCapabilityError("server does not support the required single-client mode")
         self.capabilities = capabilities
         await self.events.restore_subscriptions()

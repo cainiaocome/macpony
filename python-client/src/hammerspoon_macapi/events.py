@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Literal, cast
 
-from pydantic import Field
+from pydantic import Field, ValidationError
 
 from .models import Frame, Model
 from .protocol import JSONObject, RawEvent
@@ -201,6 +201,14 @@ class AudioDeviceChangedEvent(EventBase[Literal["audio.deviceChanged"]]):
     data: AudioChangedData
 
 
+class AudioVolumeChangedEvent(EventBase[Literal["audio.volumeChanged"]]):
+    data: AudioChangedData
+
+
+class AudioMuteChangedEvent(EventBase[Literal["audio.muteChanged"]]):
+    data: AudioChangedData
+
+
 class PowerSourceChangedEvent(EventBase[Literal["power.sourceChanged"]]):
     data: PowerSourceChangedData
 
@@ -241,6 +249,8 @@ type MacEvent = (
     | AudioOutputChangedEvent
     | AudioInputChangedEvent
     | AudioDeviceChangedEvent
+    | AudioVolumeChangedEvent
+    | AudioMuteChangedEvent
     | PowerSourceChangedEvent
     | PowerBatteryChangedEvent
     | UnknownEvent
@@ -275,6 +285,8 @@ _EVENT_TYPES: dict[str, type[Model]] = {
     "audio.outputChanged": AudioOutputChangedEvent,
     "audio.inputChanged": AudioInputChangedEvent,
     "audio.deviceChanged": AudioDeviceChangedEvent,
+    "audio.volumeChanged": AudioVolumeChangedEvent,
+    "audio.muteChanged": AudioMuteChangedEvent,
     "power.sourceChanged": PowerSourceChangedEvent,
     "power.batteryChanged": PowerBatteryChangedEvent,
 }
@@ -285,4 +297,9 @@ def parse_event(raw: RawEvent) -> MacEvent:
     event_type = _EVENT_TYPES.get(raw.event)
     if event_type is None:
         return UnknownEvent.model_validate(payload)
-    return cast(MacEvent, event_type.model_validate(payload))
+    try:
+        return cast(MacEvent, event_type.model_validate(payload))
+    except ValidationError:
+        # Event schemas may grow independently of the SDK.  Preserve the
+        # wire event instead of taking down the long-lived socket reader.
+        return UnknownEvent.model_validate(payload)

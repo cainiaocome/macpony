@@ -36,7 +36,8 @@ local event_names = {
     "window.unminimized", "window.fullscreenChanged", "screen.connected", "screen.disconnected",
     "screen.changed", "system.willSleep", "system.didWake", "system.screensDidSleep",
     "system.screensDidWake", "system.sessionLocked", "system.sessionUnlocked",
-    "wifi.changed", "audio.outputChanged", "audio.inputChanged", "audio.deviceChanged",
+    "wifi.changed", "audio.outputChanged", "audio.inputChanged", "audio.volumeChanged",
+    "audio.muteChanged", "audio.deviceChanged",
     "clipboard.changed", "power.sourceChanged", "power.batteryChanged",
 }
 

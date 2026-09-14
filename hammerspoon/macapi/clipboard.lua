@@ -1,9 +1,12 @@
 local pasteboard = require("hs.pasteboard")
 local validators = require("macapi.validators")
+local protocol = require("macapi.protocol")
 local M = { methods = {} }
 
 M.methods["clipboard.get"] = function()
-    return { text = pasteboard.getContents() }
+    local text = pasteboard.getContents()
+    if text == nil then return protocol.empty_object() end
+    return { text = text }
 end
 
 M.methods["clipboard.set"] = function(params)

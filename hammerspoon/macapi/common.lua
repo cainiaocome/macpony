@@ -31,13 +31,18 @@ function M.window_info(window)
 end
 
 function M.screen_info(screen, primary)
+    local brightness = nil
+    if type(screen.getBrightness) == "function" then
+        local ok, value = pcall(function() return screen:getBrightness() end)
+        if ok then brightness = value end
+    end
     return {
         id = tostring(screen:id()),
         uuid = screen:getUUID(),
         name = screen:name() or "",
         primary = primary,
         frame = M.frame(screen:frame()),
-        brightness = nil,
+        brightness = brightness,
     }
 end
 

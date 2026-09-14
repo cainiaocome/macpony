@@ -1,4 +1,5 @@
 local config = require("macapi.config")
+local timer = require("hs.timer")
 local validators = require("macapi.validators")
 local common = require("macapi.common")
 local M = { methods = {} }
@@ -51,24 +52,31 @@ M.methods["screens.screenshot"] = function(params)
     if not screen then return common.error("SCREEN_NOT_FOUND", "screen was not found") end
     local image = screen:snapshot()
     if not image then return common.error("FEATURE_DISABLED", "screenshot failed") end
-    local frame = screen:frame()
+    local image_size = image:size()
+    local created_at = timer.secondsSinceEpoch()
     if mode == "file" then
-        local path = config.run_dir .. "/screenshot-" .. tostring(os.time()) .. ".png"
+        local path = config.run_dir .. "/screenshot-" .. tostring(math.floor(created_at * 1000)) .. ".png"
         if not image:saveToFile(path, false, "PNG") then
             return common.error("FEATURE_DISABLED", "screenshot could not be written")
         end
-        return { mode = "file", mime = "image/png", path = path, created_at = os.time() }
+        return { mode = "file", mime = "image/png", path = path, created_at = created_at }
     end
     local encoded = image:encodeAsURLString(false, "PNG")
     if not encoded then return common.error("FEATURE_DISABLED", "screenshot encoding failed") end
     local content = encoded:match("^data:image/png;base64,(.*)$") or ""
     content = content:gsub("%s+", "")
+    if #content > config.max_inline_screenshot_bytes then
+        return common.error(
+            "SCREENSHOT_TOO_LARGE",
+            "inline screenshot exceeds the protocol limit; use mode=file"
+        )
+    end
     return {
         mode = "inline",
         mime = "image/png",
         encoding = "base64",
-        width = frame.w,
-        height = frame.h,
+        width = math.floor(image_size.w),
+        height = math.floor(image_size.h),
         content = content,
     }
 end

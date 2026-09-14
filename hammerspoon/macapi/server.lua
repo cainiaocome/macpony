@@ -11,7 +11,9 @@ local listener
 local accept_timer
 local read_pending = false
 local connection_count = 0
-local TAG_LINE = 1
+local TAG_BYTE = 1
+local input_buffer = ""
+local dropping_oversized_line = false
 
 local function quote(value)
     return "'" .. value:gsub("'", "'\\''") .. "'"
@@ -60,7 +62,7 @@ local function read_next()
     local connections = listener:connections()
     if connections ~= 1 then return end
     read_pending = true
-    local ok, result = pcall(function() return listener:read("\n", TAG_LINE) end)
+    local ok, result = pcall(function() return listener:read(1, TAG_BYTE) end)
     if not ok or not result then
         read_pending = false
     end
@@ -68,16 +70,39 @@ end
 
 local function callback(data, tag)
     read_pending = false
-    if tag ~= TAG_LINE then return end
+    if tag ~= TAG_BYTE then return end
     if not listener then return end
     if listener:connections() > 1 then
-        listener:disconnect()
+        -- hs.socket exposes the listening socket and accepted clients as one
+        -- object.  Disconnecting here would tear down the server for the
+        -- existing client too; leave the extra connection to the OS backlog.
+        return
+    end
+    if dropping_oversized_line then
+        if data == "\n" then
+            dropping_oversized_line = false
+            input_buffer = ""
+        end
         read_next()
         return
     end
-    local request, error = protocol.decode(data)
+    input_buffer = input_buffer .. data
+    if #input_buffer > config.max_line_bytes then
+        hs.printf("macapi protocol error: message exceeds maximum line size")
+        input_buffer = ""
+        dropping_oversized_line = true
+        read_next()
+        return
+    end
+    if data ~= "\n" then
+        read_next()
+        return
+    end
+    local request, error, request_id = protocol.decode(input_buffer)
+    input_buffer = ""
     if not request then
         hs.printf("macapi protocol error: %s", tostring(error))
+        send(protocol.protocol_failure(request_id, tostring(error)))
         read_next()
         return
     end
@@ -91,6 +116,14 @@ function M.start()
     ensure_runtime()
     listener = socket.server(config.socket_path, callback)
     if not listener then error("unable to listen on " .. config.socket_path) end
+    local attributes = fs.attributes(config.socket_path)
+    if not attributes or attributes.mode ~= "socket" then
+        listener:disconnect()
+        listener = nil
+        error("unable to bind socket at " .. config.socket_path)
+    end
+    input_buffer = ""
+    dropping_oversized_line = false
     chmod(config.socket_path, "600")
     eventbus.init(send)
     accept_timer = timer.doEvery(0.1, function()
@@ -111,9 +144,12 @@ function M.stop()
     if not listener then return end
     if accept_timer then accept_timer:stop(); accept_timer = nil end
     read_pending = false
+    input_buffer = ""
+    dropping_oversized_line = false
     connection_count = 0
     listener:disconnect()
     listener = nil
+    eventbus.stop()
     local attributes = fs.attributes(config.socket_path)
     if attributes and attributes.mode == "socket" then os.remove(config.socket_path) end
 end

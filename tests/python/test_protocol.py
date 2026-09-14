@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import cast
 
 import pytest
+from hammerspoon_macapi.constants import MAX_LINE_BYTES
 from hammerspoon_macapi.events import (
     ClipboardChangedEvent,
     PowerBatteryChangedEvent,
@@ -17,8 +19,15 @@ from hammerspoon_macapi.exceptions import (
     WindowNotFoundError,
     rpc_exception,
 )
-from hammerspoon_macapi.models import InlineScreenshot, SystemInfo
+from hammerspoon_macapi.models import (
+    ClipboardText,
+    FileScreenshot,
+    InlineScreenshot,
+    Screenshot,
+    SystemInfo,
+)
 from hammerspoon_macapi.protocol import RawEvent, decode_message
+from pydantic import TypeAdapter
 
 FIXTURES = Path(__file__).parents[2] / "protocol-fixtures"
 
@@ -61,6 +70,30 @@ def test_unknown_event_is_forward_compatible() -> None:
     assert event.data["foo"] == "bar"
 
 
+def test_invalid_known_event_schema_falls_back_to_unknown_event() -> None:
+    raw = RawEvent.model_validate(
+        {
+            "v": 1,
+            "type": "event",
+            "seq": 1,
+            "event": "window.focused",
+            "timestamp": 1.0,
+            "data": {"title": "missing window id"},
+        }
+    )
+    assert isinstance(parse_event(raw), UnknownEvent)
+
+
+def test_empty_lua_object_shape_is_normalized() -> None:
+    assert ClipboardText.model_validate([]).text is None
+    raw = decode_message(
+        b'{"v":1,"type":"event","seq":1,"event":"future.empty",'
+        b'"timestamp":1.0,"data":[]}\n'
+    )
+    assert isinstance(raw, RawEvent)
+    assert isinstance(parse_event(raw), UnknownEvent)
+
+
 def test_implemented_observation_events_are_typed() -> None:
     wifi = RawEvent.model_validate(
         {
@@ -98,6 +131,35 @@ def test_screenshot_decodes_base64() -> None:
     assert screenshot.decode() == b"hello"
 
 
+def test_screenshot_union_discriminates_inline_and_file_modes() -> None:
+    inline = cast(
+        InlineScreenshot | FileScreenshot,
+        TypeAdapter(Screenshot).validate_python(
+            {
+                "mode": "inline",
+                "mime": "image/png",
+                "encoding": "base64",
+                "width": 1,
+                "height": 1,
+                "content": "aGVsbG8=",
+            }
+        ),
+    )
+    file = cast(
+        InlineScreenshot | FileScreenshot,
+        TypeAdapter(Screenshot).validate_python(
+            {
+                "mode": "file",
+                "mime": "image/png",
+                "path": "/tmp/a.png",
+                "created_at": 1.0,
+            }
+        ),
+    )
+    assert isinstance(inline, InlineScreenshot)
+    assert isinstance(file, FileScreenshot)
+
+
 def test_rpc_error_mapping() -> None:
     error = rpc_exception("WINDOW_NOT_FOUND", "gone")
     assert isinstance(error, WindowNotFoundError)
@@ -111,4 +173,4 @@ def test_malformed_message_is_rejected() -> None:
 
 def test_oversized_message_is_rejected() -> None:
     with pytest.raises(ProtocolError, match="maximum line size"):
-        decode_message(b"{" + b"a" * (1024 * 1024) + b"}")
+        decode_message(b"{" + b"a" * MAX_LINE_BYTES + b"}")

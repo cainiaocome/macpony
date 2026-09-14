@@ -20,12 +20,19 @@ class ProtocolError(MacAPIError):
 
 
 class ProtocolVersionError(ProtocolError):
-    def __init__(self, client_version: int, server_version: int) -> None:
+    def __init__(
+        self, client_version: int, server_version: int, *, reason: str | None = None
+    ) -> None:
         self.client_version = client_version
         self.server_version = server_version
         super().__init__(
-            f"unsupported protocol version: client={client_version}, server={server_version}"
+            reason
+            or f"unsupported protocol version: client={client_version}, server={server_version}"
         )
+
+
+class ServerCapabilityError(ProtocolError):
+    """The server does not provide a capability required by this SDK."""
 
 
 class RPCError(MacAPIError):
