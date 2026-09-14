@@ -11,7 +11,8 @@ local listener
 local accept_timer
 local read_pending = false
 local connection_count = 0
-local TAG_LINE = 1
+local line_buffer = ""
+local TAG_BYTE = 1
 local debug_enabled = os.getenv("MACAPI_DEBUG") == "1"
 
 local function debug(message)
@@ -67,7 +68,7 @@ local function read_next()
     if connections ~= 1 then return end
     read_pending = true
     debug("read armed")
-    local ok, result = pcall(function() return listener:read("\n", TAG_LINE) end)
+    local ok, result = pcall(function() return listener:read(1, TAG_BYTE) end)
     if not ok or not result then
         read_pending = false
         debug("read arm failed: " .. tostring(result))
@@ -77,14 +78,27 @@ end
 local function callback(data, tag)
     read_pending = false
     debug("read callback tag=" .. tostring(tag) .. " bytes=" .. tostring(data and #data or 0))
-    if tag ~= TAG_LINE then return end
+    if tag ~= TAG_BYTE or type(data) ~= "string" then return end
     if not listener then return end
     if listener:connections() > 1 then
         listener:disconnect()
         read_next()
         return
     end
-    local request, error = protocol.decode(data)
+    line_buffer = line_buffer .. data
+    if #line_buffer > config.max_line_bytes then
+        hs.printf("macapi protocol error: message exceeds maximum line size")
+        line_buffer = ""
+        read_next()
+        return
+    end
+    if data:sub(-1) ~= "\n" then
+        read_next()
+        return
+    end
+    local line = line_buffer
+    line_buffer = ""
+    local request, error = protocol.decode(line)
     if not request then
         hs.printf("macapi protocol error: %s", tostring(error))
         read_next()
@@ -131,6 +145,7 @@ function M.stop()
     if accept_timer then accept_timer:stop(); accept_timer = nil end
     read_pending = false
     connection_count = 0
+    line_buffer = ""
     listener:disconnect()
     listener = nil
     local attributes = fs.attributes(config.socket_path)
