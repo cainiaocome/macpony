@@ -10,6 +10,7 @@ local M = {}
 local listener
 local accept_timer
 local read_pending = false
+local connection_count = 0
 local TAG_LINE = 1
 
 local function quote(value)
@@ -89,7 +90,13 @@ function M.start()
     chmod(config.socket_path, "600")
     eventbus.init(send)
     accept_timer = timer.doEvery(0.1, function()
-        if listener and listener:connections() == 0 then read_pending = false end
+        if listener then
+            local connections = listener:connections()
+            if connections ~= connection_count then
+                connection_count = connections
+                read_pending = false
+            end
+        end
         read_next()
     end)
     read_next()
@@ -109,6 +116,7 @@ function M.stop()
     if not listener then return end
     if accept_timer then accept_timer:stop(); accept_timer = nil end
     read_pending = false
+    connection_count = 0
     listener:disconnect()
     listener = nil
     local attributes = fs.attributes(config.socket_path)
