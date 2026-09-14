@@ -1,5 +1,6 @@
 local fs = require("hs.fs")
 local socket = require("hs.socket")
+local timer = require("hs.timer")
 local config = require("macapi.config")
 local protocol = require("macapi.protocol")
 local dispatcher = require("macapi.dispatcher")
@@ -7,6 +8,8 @@ local eventbus = require("macapi.eventbus")
 
 local M = {}
 local listener
+local accept_timer
+local read_pending = false
 local TAG_LINE = 1
 
 local function quote(value)
@@ -52,10 +55,14 @@ local function respond(id, ok, result, code, message)
 end
 
 local function read_next()
-    if listener then pcall(function() listener:read("\n", TAG_LINE) end) end
+    if not listener or read_pending or listener:connections() ~= 1 then return end
+    read_pending = true
+    local ok = pcall(function() listener:read("\n", TAG_LINE) end)
+    if not ok then read_pending = false end
 end
 
 local function callback(data, tag)
+    read_pending = false
     if tag ~= TAG_LINE then return end
     if not listener or listener:connections() ~= 1 then
         if listener and listener:connections() > 1 then listener:disconnect() end
@@ -80,12 +87,18 @@ function M.start()
     if not listener then error("unable to listen on " .. config.socket_path) end
     chmod(config.socket_path, "600")
     eventbus.init(send)
+    accept_timer = timer.doEvery(0.1, function()
+        if listener and listener:connections() ~= 1 then read_pending = false end
+        read_next()
+    end)
     read_next()
     return listener
 end
 
 function M.stop()
     if not listener then return end
+    if accept_timer then accept_timer:stop(); accept_timer = nil end
+    read_pending = false
     listener:disconnect()
     listener = nil
     local attributes = fs.attributes(config.socket_path)
