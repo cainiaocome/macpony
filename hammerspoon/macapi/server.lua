@@ -2,8 +2,7 @@
 ---
 --- `hs.socket.server` exposes a shared listener/client object, so version 1
 --- keeps the protocol single-client and refuses to write while an extra
---- connection is attached. Incoming bytes are assembled into bounded lines
---- from chunks so byte-by-byte reads do not repeatedly concatenate strings;
+--- connection is attached. Incoming bytes are assembled into bounded lines;
 --- malformed lines are reported without killing the listener.
 local fs = require("hs.fs")
 local socket = require("hs.socket")
@@ -20,14 +19,8 @@ local gc_timer
 local pending_read_tag
 local next_read_tag = 0
 local connection_count = 0
-local input_chunks = {}
-local input_size = 0
+local input_buffer = ""
 local dropping_oversized_line = false
-
-local function reset_input()
-    input_chunks = {}
-    input_size = 0
-end
 
 local function quote(value)
     return "'" .. value:gsub("'", "'\\''") .. "'"
@@ -105,16 +98,15 @@ local function callback(data, tag)
     if dropping_oversized_line then
         if data == "\n" then
             dropping_oversized_line = false
-            reset_input()
+            input_buffer = ""
         end
         read_next()
         return
     end
-    input_chunks[#input_chunks + 1] = data
-    input_size = input_size + #data
-    if input_size > config.max_line_bytes then
+    input_buffer = input_buffer .. data
+    if #input_buffer > config.max_line_bytes then
         hs.printf("macapi protocol error: message exceeds maximum line size")
-        reset_input()
+        input_buffer = ""
         dropping_oversized_line = true
         read_next()
         return
@@ -123,8 +115,8 @@ local function callback(data, tag)
         read_next()
         return
     end
-    local request, error, request_id = protocol.decode(table.concat(input_chunks))
-    reset_input()
+    local request, error, request_id = protocol.decode(input_buffer)
+    input_buffer = ""
     if not request then
         hs.printf("macapi protocol error: %s", tostring(error))
         send(protocol.protocol_failure(request_id, tostring(error)))
@@ -148,7 +140,7 @@ local function poll_connections()
         -- A disconnected client's outstanding read is no longer useful. The
         -- generation tag prevents a late callback from affecting a new one.
         pending_read_tag = nil
-        reset_input()
+        input_buffer = ""
         dropping_oversized_line = false
         eventbus.client_disconnected()
     elseif connections == 1 then
@@ -168,7 +160,7 @@ function M.start()
         listener = nil
         error("unable to bind socket at " .. config.socket_path)
     end
-    reset_input()
+    input_buffer = ""
     dropping_oversized_line = false
     pending_read_tag = nil
     next_read_tag = 0
@@ -188,7 +180,7 @@ function M.stop()
     if accept_timer then accept_timer:stop(); accept_timer = nil end
     if gc_timer then gc_timer:stop(); gc_timer = nil end
     pending_read_tag = nil
-    reset_input()
+    input_buffer = ""
     dropping_oversized_line = false
     connection_count = 0
     listener:disconnect()
