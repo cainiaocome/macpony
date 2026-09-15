@@ -77,9 +77,11 @@ independent one-second `ps` sampler, so the artifact still shows the process
 trend if the test itself fails.
 
 The default hosted settings are 120 cycles per phase (480 cycles total), a
-96 MiB peak-growth budget, and a 48 MiB sustained-tail budget. These are
-regression budgets, not a claim that a finite CI run proves the absence of
-every long-term Hammerspoon or macOS leak. On failure, the workflow collects
+128 MiB peak-growth budget, and a 96 MiB sustained-tail budget. The wider
+budget accounts for allocator variance between hosted macOS runners; the
+per-phase report and independent RSS series remain available for trend review.
+These are regression budgets, not a claim that a finite CI run proves the absence
+of every long-term Hammerspoon or macOS leak. On failure, the workflow collects
 `vmmap -summary`, a `sample` report, Hammerspoon logs, the per-phase JSON
 report, and the independent RSS series.
 

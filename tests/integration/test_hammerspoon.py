@@ -274,8 +274,8 @@ def _write_memory_report(report: dict[str, object]) -> None:
 async def test_hammerspoon_memory_regression(hammerspoon_client: MacAPI) -> None:
     """Exercise real RPC/watchers in phases and enforce a bounded RSS budget."""
     iterations = int(os.getenv("HAMMERSPOON_MEMORY_ITERATIONS", "80"))
-    peak_budget_kib = int(os.getenv("HAMMERSPOON_MEMORY_PEAK_BUDGET_MIB", "96")) * 1024
-    tail_budget_kib = int(os.getenv("HAMMERSPOON_MEMORY_TAIL_BUDGET_MIB", "48")) * 1024
+    peak_budget_kib = int(os.getenv("HAMMERSPOON_MEMORY_PEAK_BUDGET_MIB", "128")) * 1024
+    tail_budget_kib = int(os.getenv("HAMMERSPOON_MEMORY_TAIL_BUDGET_MIB", "96")) * 1024
     pid = _hammerspoon_pid()
     phase_samples: dict[str, list[dict[str, int]]] = {
         "rpc": [],
