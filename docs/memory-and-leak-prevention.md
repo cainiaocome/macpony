@@ -55,9 +55,11 @@ then repeatedly performs RPC activity through the actual Unix socket. The
 memory soak uses separate phases so a residual trend can be attributed to a
 class of operation:
 
-- `rpc`: system, application, window, audio, clipboard, network, and user
-  activity calls, including repeated audio control calls when a default output
-  device is available;
+- `rpc`: system, application, window, clipboard, network, and user
+  activity calls;
+- `audio`: repeated idempotent audio control calls when a default output
+  device is available. The RPC layer skips a CoreAudio write when the value is
+  already current;
 - `screenshots`: repeated screen enumeration and inline screenshots; and
 - `windows`: repeated window enumeration, focus lookup, and frame operations.
 

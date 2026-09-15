@@ -24,6 +24,8 @@ M.methods["audio.setVolume"] = function(params)
     if volume < 0 or volume > 100 then return common.error("INVALID_PARAMS", "volume must be between 0 and 100") end
     local output = audio.defaultOutputDevice()
     if not output then return common.error("FEATURE_DISABLED", "no default output device") end
+    local current = output:volume()
+    if current ~= nil and math.abs(current - volume) < 0.01 then return nil end
     output:setVolume(volume)
     return nil
 end
@@ -34,6 +36,7 @@ M.methods["audio.setMuted"] = function(params)
     if muted == nil then return nil, error end
     local output = audio.defaultOutputDevice()
     if not output then return common.error("FEATURE_DISABLED", "no default output device") end
+    if output:muted() == muted then return nil end
     output:setMuted(muted)
     return nil
 end

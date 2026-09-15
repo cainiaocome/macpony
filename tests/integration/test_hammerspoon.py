@@ -279,6 +279,7 @@ async def test_hammerspoon_memory_regression(hammerspoon_client: MacAPI) -> None
     pid = _hammerspoon_pid()
     phase_samples: dict[str, list[dict[str, int]]] = {
         "rpc": [],
+        "audio": [],
         "screenshots": [],
         "windows": [],
     }
@@ -299,9 +300,6 @@ async def test_hammerspoon_memory_regression(hammerspoon_client: MacAPI) -> None
         await hammerspoon_client.system.status()
         await hammerspoon_client.apps.list()
         await hammerspoon_client.windows.list()
-        audio = await hammerspoon_client.audio.get()
-        if audio.output is not None and audio.output.volume is not None:
-            await hammerspoon_client.audio.set_volume(audio.output.volume)
         await hammerspoon_client.clipboard.get()
         await hammerspoon_client.network.get()
         await hammerspoon_client.system.user_activity()
@@ -310,6 +308,11 @@ async def test_hammerspoon_memory_regression(hammerspoon_client: MacAPI) -> None
         screens = await hammerspoon_client.screens.list()
         if screens:
             await hammerspoon_client.screens.screenshot(screens[0].id, mode="inline")
+
+    async def audio_activity() -> None:
+        audio = await hammerspoon_client.audio.get()
+        if audio.output is not None and audio.output.volume is not None:
+            await hammerspoon_client.audio.set_volume(audio.output.volume)
 
     async def window_activity() -> None:
         await hammerspoon_client.windows.list()
@@ -347,6 +350,7 @@ async def test_hammerspoon_memory_regression(hammerspoon_client: MacAPI) -> None
             await asyncio.sleep(0.1)
         for phase, activity in (
             ("rpc", rpc_activity),
+            ("audio", audio_activity),
             ("screenshots", screenshot_activity),
             ("windows", window_activity),
         ):
