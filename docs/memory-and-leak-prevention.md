@@ -68,12 +68,15 @@ class of operation:
 Each phase also delivers subscribed events through the Python client.
 
 The test samples the Hammerspoon process RSS after each activity cycle. It
-compares the median of the first and last sample windows and fails if either
-the peak or the sustained tail exceeds the configured budget. The workflow
-also runs an independent one-second `ps` sampler, so the artifact still shows
-the process trend if the test itself fails.
+compares the median of the first and last sample windows within each activity
+phase and fails if either that phase's peak or sustained tail exceeds the
+configured budget. The report also includes the cumulative trend across all
+phases; that value is diagnostic because different phases can legitimately
+populate different Hammerspoon/OS caches. The workflow also runs an
+independent one-second `ps` sampler, so the artifact still shows the process
+trend if the test itself fails.
 
-The default hosted settings are 80 cycles per phase (240 cycles total), a
+The default hosted settings are 120 cycles per phase (480 cycles total), a
 96 MiB peak-growth budget, and a 48 MiB sustained-tail budget. These are
 regression budgets, not a claim that a finite CI run proves the absence of
 every long-term Hammerspoon or macOS leak. On failure, the workflow collects

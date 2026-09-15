@@ -378,12 +378,11 @@ async def test_hammerspoon_memory_regression(hammerspoon_client: MacAPI) -> None
 
     all_samples = [sample for samples in phase_samples.values() for sample in samples]
     assert all_samples, "Hammerspoon memory soak did not produce any RSS samples"
-    overall = summarize(all_samples)
-    initial = overall["initial_median_kib"]
-    final = overall["final_median_kib"]
-    peak = overall["peak_kib"]
-    assert peak - initial <= peak_budget_kib, report
-    assert final - initial <= tail_budget_kib, report
+    for phase, summary in phase_summaries.items():
+        if not summary:
+            continue
+        assert summary["peak_growth_kib"] <= peak_budget_kib, {phase: summary, **report}
+        assert summary["tail_growth_kib"] <= tail_budget_kib, {phase: summary, **report}
 
 
 async def test_hammerspoon_event_iterator_closes_with_client(

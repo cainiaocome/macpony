@@ -102,7 +102,7 @@ jobs:
       - name: Real Hammerspoon end-to-end test suite
         env:
           RUN_HAMMERSPOON_INTEGRATION: '1'
-          HAMMERSPOON_MEMORY_ITERATIONS: '80'
+          HAMMERSPOON_MEMORY_ITERATIONS: '120'
           HAMMERSPOON_MEMORY_REPORT: ${{ runner.temp }}/hammerspoon-memory.json
         run: pytest -vv tests/integration -m hammerspoon
       - name: Collect Hammerspoon memory diagnostics
