@@ -15,9 +15,9 @@ local eventbus = require("macapi.eventbus")
 local M = {}
 local listener
 local accept_timer
-local read_pending = false
+local pending_read_tag
+local next_read_tag = 0
 local connection_count = 0
-local TAG_BYTE = 1
 local input_buffer = ""
 local dropping_oversized_line = false
 
@@ -70,26 +70,28 @@ end
 local function read_next()
     -- Read exactly one byte so the server can enforce the record bound before
     -- a delimiter read allocates an unbounded buffer.
-    if not listener or read_pending then return end
+    if not listener or pending_read_tag then return end
     local connections = listener:connections()
     if connections ~= 1 then return end
-    read_pending = true
-    local ok, result = pcall(function() return listener:read(1, TAG_BYTE) end)
-    if not ok or not result then
-        read_pending = false
+    next_read_tag = next_read_tag + 1
+    local read_tag = next_read_tag
+    pending_read_tag = read_tag
+    local ok, result = pcall(function() return listener:read(1, read_tag) end)
+    if (not ok or not result) and pending_read_tag == read_tag then
+        pending_read_tag = nil
     end
 end
 
 local function callback(data, tag)
     -- Append bytes, discard oversized records through their newline, and
     -- dispatch only complete request objects.
-    read_pending = false
-    if tag ~= TAG_BYTE then return end
+    if pending_read_tag ~= tag then return end
+    pending_read_tag = nil
     if not listener then return end
-    if listener:connections() > 1 then
+    if listener:connections() ~= 1 then
         -- hs.socket exposes the listening socket and accepted clients as one
         -- object.  Disconnecting here would tear down the server for the
-        -- existing client too; leave the extra connection to the OS backlog.
+        -- existing client too; leave extra connections to the OS backlog.
         return
     end
     if dropping_oversized_line then
@@ -125,6 +127,26 @@ local function callback(data, tag)
     read_next()
 end
 
+local function poll_connections()
+    if not listener then return end
+    local connections = listener:connections()
+    if connections == connection_count then
+        read_next()
+        return
+    end
+    connection_count = connections
+    if connections == 0 then
+        -- A disconnected client's outstanding read is no longer useful. The
+        -- generation tag prevents a late callback from affecting a new one.
+        pending_read_tag = nil
+        input_buffer = ""
+        dropping_oversized_line = false
+        eventbus.client_disconnected()
+    elseif connections == 1 then
+        read_next()
+    end
+end
+
 function M.start()
     --- Create the runtime directory, bind the socket, and arm the read loop.
     if listener then return listener end
@@ -139,18 +161,12 @@ function M.start()
     end
     input_buffer = ""
     dropping_oversized_line = false
+    pending_read_tag = nil
+    next_read_tag = 0
+    connection_count = 0
     chmod(config.socket_path, "600")
     eventbus.init(send)
-    accept_timer = timer.doEvery(0.1, function()
-        if listener then
-            local connections = listener:connections()
-            if connections ~= connection_count then
-                connection_count = connections
-                read_pending = false
-            end
-        end
-        read_next()
-    end)
+    accept_timer = timer.doEvery(config.connection_poll_interval, poll_connections)
     read_next()
     return listener
 end
@@ -160,7 +176,7 @@ function M.stop()
     --- the socket created by this service.
     if not listener then return end
     if accept_timer then accept_timer:stop(); accept_timer = nil end
-    read_pending = false
+    pending_read_tag = nil
     input_buffer = ""
     dropping_oversized_line = false
     connection_count = 0

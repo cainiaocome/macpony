@@ -19,6 +19,10 @@ M.max_line_bytes = 16 * 1024 * 1024
 M.max_inline_screenshot_bytes = M.max_line_bytes - 4096
 M.max_queue_size = 256
 M.event_coalesce_ms = 75
+--- Polling is only needed to notice a newly accepted Unix-socket client.
+M.connection_poll_interval = 1.0
+--- Safety-net interval for stale window frame metadata.
+M.window_frame_prune_interval = 300
 -- The full API is enabled by default. Set MACAPI_ENABLE_DANGEROUS_ACTIONS=0
 -- for a restricted deployment that disables input, lock, screensaver, and app
 -- quit operations.

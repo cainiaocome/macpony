@@ -2,7 +2,12 @@
 
 ## Goal
 
-Implement the Unix-domain-socket NDJSON protocol, Hammerspoon server, typed async Python SDK, tests, and GitHub CI described in `docs/Hammerspoon_Mac_Control_Unix_Socket_Typed_Python_SDK_Design.md`.
+Fix the diagnosed Hammerspoon/Lua memory-growth paths, add regression coverage
+including a real macOS RSS soak test, and verify the result in GitHub Actions.
+
+The original Unix-domain-socket NDJSON protocol, Hammerspoon server, typed
+async Python SDK, tests, documentation, and CI implementation are complete;
+the memory work below is the active milestone.
 
 ## Completed
 
@@ -28,11 +33,19 @@ Implement the Unix-domain-socket NDJSON protocol, Hammerspoon server, typed asyn
 
 ## In progress
 
-- None.
+- Audit and remediate the five paths in
+  `tmp/hammperspoon-memory-leak-diagnosis.md`: window watcher scope and stale
+  frame state, audio watcher callback replacement, socket read scheduling, and
+  disconnected event state.
+- Add a real macOS Hammerspoon activity soak that records process RSS and
+  uploads its report from GitHub Actions.
 
 ## Remaining
 
-- None.
+- Run the full local checks and push the memory-fix milestone.
+- Inspect the hosted macOS Hammerspoon job and its memory report. If RSS still
+  grows beyond the defined regression budget, use the hosted report/logs to
+  narrow the remaining Hammerspoon-side cause before declaring completion.
 
 ## Constraints and decisions
 

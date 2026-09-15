@@ -7,13 +7,54 @@ local application_watcher = require("hs.application.watcher")
 local battery = require("hs.battery")
 local eventbus = require("macapi.eventbus")
 local common = require("macapi.common")
+local config = require("macapi.config")
 local state = require("macapi.state")
+local timer = require("hs.timer")
 
 local M = {}
 local watchers = {}
 local previous_frames = {}
 local known_screens = {}
 local clipboard_active = false
+
+local function prune_previous_frames()
+    --- Remove frame snapshots for windows no longer known to macOS.
+    local ok, windows = pcall(function() return hs.window.allWindows() end)
+    if not ok or type(windows) ~= "table" then return end
+    local live = {}
+    for _, window in ipairs(windows) do
+        local id_ok, id = pcall(function() return window:id() end)
+        if id_ok and id then live[id] = true end
+    end
+    for id in pairs(previous_frames) do
+        if not live[id] then previous_frames[id] = nil end
+    end
+end
+
+local function audio_device_uid(device)
+    local ok, uid = pcall(function() return device:uid() end)
+    if ok and uid then return tostring(uid) end
+    return tostring(device)
+end
+
+local function same_audio_devices(left, right)
+    local left_count, right_count = 0, 0
+    for uid in pairs(left) do
+        left_count = left_count + 1
+        if not right[uid] then return false end
+    end
+    for _ in pairs(right) do right_count = right_count + 1 end
+    return left_count == right_count
+end
+
+local function audio_device_callback(_, event)
+    --- Reused callback for all default audio devices.
+    if event == "vmvc" then
+        eventbus.emit("audio.volumeChanged", {}, { coalesce = true })
+    elseif event == "mute" then
+        eventbus.emit("audio.muteChanged", {}, { coalesce = true })
+    end
+end
 
 local function window_event_data(window, enabled)
     local info = common.window_info(window)
@@ -45,7 +86,10 @@ function M.start()
     end):start()
 
     local window_filter = require("hs.window.filter")
-    watchers.windows = window_filter.new()
+    -- Window movement is a high-rate Accessibility stream. Restrict the
+    -- observer to the current Mission Control space while preserving the
+    -- public movement/resizing events for windows the user can interact with.
+    watchers.windows = window_filter.new():setCurrentSpace(true)
     local function emit_window_change(name, window)
         local data, info = window_event_data(window)
         local previous = previous_frames[info.id]
@@ -71,6 +115,7 @@ function M.start()
         [window_filter.windowFullscreened] = function(window) eventbus.emit("window.fullscreenChanged", (window_event_data(window, true))) end,
         [window_filter.windowUnfullscreened] = function(window) eventbus.emit("window.fullscreenChanged", (window_event_data(window, false))) end,
     })
+    watchers.previous_frame_pruner = timer.doEvery(config.window_frame_prune_interval, prune_previous_frames)
 
     local function screen_event_data(screen)
         return {
@@ -142,24 +187,33 @@ function M.start()
 
     local audio = require("hs.audiodevice")
     local function refresh_audio_devices()
+        local desired = {}
+        local desired_uids = {}
+        for _, device in ipairs({ audio.defaultOutputDevice(), audio.defaultInputDevice() }) do
+            if device then
+                local uid = audio_device_uid(device)
+                if not desired_uids[uid] then
+                    desired_uids[uid] = true
+                    table.insert(desired, device)
+                end
+            end
+        end
+        if same_audio_devices(watchers.audio_device_uids or {}, desired_uids) then return end
+
         if watchers.audio_devices then
             for _, device in ipairs(watchers.audio_devices) do
                 pcall(function() device:watcherStop() end)
+                -- watcherStop() does not release the Lua callback reference;
+                -- explicitly clearing it prevents one closure per rebuild
+                -- from remaining retained by the CoreAudio wrapper.
+                pcall(function() device:watcherCallback(nil) end)
             end
         end
         watchers.audio_devices = {}
-        local function audio_device_callback(_, event)
-            if event == "vmvc" then
-                eventbus.emit("audio.volumeChanged", {}, { coalesce = true })
-            elseif event == "mute" then
-                eventbus.emit("audio.muteChanged", {}, { coalesce = true })
-            end
-        end
-        for _, device in ipairs({ audio.defaultOutputDevice(), audio.defaultInputDevice() }) do
-            if device then
-                device:watcherCallback(audio_device_callback):watcherStart()
-                table.insert(watchers.audio_devices, device)
-            end
+        watchers.audio_device_uids = desired_uids
+        for _, device in ipairs(desired) do
+            device:watcherCallback(audio_device_callback):watcherStart()
+            table.insert(watchers.audio_devices, device)
         end
     end
     audio.watcher.setCallback(function(event)
@@ -207,6 +261,7 @@ function M.stop()
     if watchers.audio_devices then
         for _, device in ipairs(watchers.audio_devices) do
             pcall(function() device:watcherStop() end)
+            pcall(function() device:watcherCallback(nil) end)
         end
     end
     for _, watcher in pairs(watchers) do

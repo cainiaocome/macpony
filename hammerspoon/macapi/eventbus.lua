@@ -34,6 +34,13 @@ local function flush()
     end
 end
 
+local function clear_pending()
+    for key, timer in pairs(pending) do
+        if key:sub(-6) == ":timer" and timer and timer.stop then timer:stop() end
+    end
+    pending = {}
+end
+
 function M.init(sender)
     --- Attach the current server sender callback.
     send_message = sender
@@ -41,12 +48,15 @@ end
 
 function M.stop()
     --- Cancel coalescing timers and discard queued events during shutdown.
-    for key, timer in pairs(pending) do
-        if key:sub(-6) == ":timer" and timer and timer.stop then timer:stop() end
-    end
-    pending = {}
-    queue = {}
+    M.client_disconnected()
     send_message = nil
+end
+
+function M.client_disconnected()
+    --- Clear client-specific state after the single active client disconnects.
+    clear_pending()
+    queue = {}
+    subscriptions.unsubscribe_all()
 end
 
 function M.emit(name, data, options)

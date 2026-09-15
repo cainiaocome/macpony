@@ -44,6 +44,7 @@ macOS APIs and event watchers
 | Event delivery | [`hammerspoon/macapi/eventbus.lua`](../hammerspoon/macapi/eventbus.lua), [`hammerspoon/macapi/watchers.lua`](../hammerspoon/macapi/watchers.lua), and [`python-client/src/hammerspoon_macapi/namespaces/events.py`](../python-client/src/hammerspoon_macapi/namespaces/events.py) |
 | Python connection lifecycle | [`python-client/src/hammerspoon_macapi/connection.py`](../python-client/src/hammerspoon_macapi/connection.py) |
 | Python typed models | [`python-client/src/hammerspoon_macapi/models.py`](../python-client/src/hammerspoon_macapi/models.py) and [`python-client/src/hammerspoon_macapi/events.py`](../python-client/src/hammerspoon_macapi/events.py) |
+| Memory and lifecycle safeguards | [`memory-and-leak-prevention.md`](memory-and-leak-prevention.md) |
 | Tests | [`tests/python`](../tests/python), [`tests/lua`](../tests/lua), and [`tests/integration`](../tests/integration) |
 
 ## Scope and compatibility

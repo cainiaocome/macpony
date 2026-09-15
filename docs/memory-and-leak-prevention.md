@@ -1,0 +1,84 @@
+# Memory and lifecycle safeguards
+
+The service is designed to remain resident in Hammerspoon for days or weeks.
+The safeguards below keep high-rate macOS notifications, socket state, and
+Python event delivery bounded without removing the public API.
+
+## Hammerspoon watcher state
+
+`watchers.lua` uses `hs.window.filter` for window lifecycle notifications. The
+filter is restricted to the current Mission Control space with
+`setCurrentSpace(true)`. Window move and resize events remain available for
+windows in that scope, but the service does not maintain an equally active
+movement stream for every window in every space.
+
+The service keeps the last frame for each observed window so it can derive
+`window.resized` from a movement notification. The entry is removed on
+`window.destroyed` and a safety-net timer prunes any IDs that are absent from
+`hs.window.allWindows()` every five minutes. This handles force-quit and other
+macOS paths that do not deliver a matching destroy notification.
+
+Default audio input and output watchers use one process-lifetime Lua callback.
+The device list is rebuilt only when the default device UIDs change. Rebuilds
+stop the old watcher and explicitly set its callback to `nil`; stopping alone
+does not necessarily release the callback reference held by the Hammerspoon
+audio wrapper. Duplicate input/output references to the same device are also
+deduplicated.
+
+`watchers.stop()` performs the same callback cleanup before releasing the
+watcher table. Reloads therefore do not accumulate Accessibility, CoreAudio,
+or clipboard observer callbacks.
+
+## Socket and event-bus lifecycle
+
+The socket server polls for newly accepted clients once per second. It does
+not reset an outstanding read merely because the connection count changed.
+Each one-byte read has a monotonically increasing tag, and a late callback
+from a disconnected socket is ignored unless it matches the current pending
+read. This avoids queueing multiple CocoaAsyncSocket reads during reconnect
+churn.
+
+When the only client disconnects, the server clears the partial input record,
+coalescing timers, queued events, and server-side subscriptions. The next
+client starts with an idle event bus. The event queue remains bounded at
+`max_queue_size` (256 by default) as an additional protection against a slow
+or absent consumer.
+
+The Python client has the corresponding bounded event queue and removes
+completed callback tasks from its task set. In-flight RPC futures are removed
+on cancellation, timeout, or transport loss.
+
+## macOS regression coverage
+
+The `hammerspoon` GitHub Actions job runs the normal real-environment suite and
+then repeatedly performs RPC activity through the actual Unix socket:
+
+- system, application, window, screen, audio, clipboard, network, and user
+  activity calls;
+- window frame operations and periodic inline screenshots;
+- repeated event subscription and delivery; and
+- repeated audio control calls when a default output device is available.
+
+The test samples the Hammerspoon process RSS after each activity cycle. It
+compares the median of the first and last sample windows and fails if either
+the peak or the sustained tail exceeds the configured budget. The workflow
+also runs an independent one-second `ps` sampler, so the artifact still shows
+the process trend if the test itself fails.
+
+The default hosted settings are 80 cycles, a 96 MiB peak-growth budget, and a
+48 MiB sustained-tail budget. These are regression budgets, not a claim that a
+finite CI run proves the absence of every long-term Hammerspoon or macOS
+leak. On failure, the workflow collects `vmmap -summary`, a `sample` report,
+Hammerspoon logs, the per-cycle JSON report, and the independent RSS series.
+
+Run the real test locally on a GUI-enabled macOS host with:
+
+```bash
+RUN_HAMMERSPOON_INTEGRATION=1 \
+HAMMERSPOON_MEMORY_REPORT=/tmp/hammerspoon-memory.json \
+pytest -vv tests/integration -m hammerspoon
+```
+
+The test requires the same Accessibility and Screen Recording permissions as
+the corresponding Hammerspoon APIs. A failure caused by missing macOS
+permissions is an environment failure, not evidence of a memory regression.

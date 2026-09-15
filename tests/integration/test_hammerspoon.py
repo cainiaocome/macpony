@@ -1,7 +1,11 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
+import json
 import os
+import statistics
+import subprocess
 import sys
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -225,6 +229,133 @@ async def test_hammerspoon_clipboard_event_round_trip(
         finally:
             await mac.clipboard.set(restore_text)
             await mac.events.unsubscribe_all()
+
+
+def _hammerspoon_pid() -> int:
+    """Return the real Hammerspoon process monitored by the macOS soak."""
+    configured = os.getenv("HAMMERSPOON_PID")
+    if configured:
+        return int(configured)
+    result = subprocess.run(
+        ["pgrep", "-n", "-x", "Hammerspoon"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return int(result.stdout.strip())
+
+
+def _hammerspoon_rss_kib(pid: int) -> int:
+    """Read the Hammerspoon RSS value from macOS ``ps`` in KiB."""
+    result = subprocess.run(
+        ["ps", "-o", "rss=", "-p", str(pid)],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    values = [line.strip() for line in result.stdout.splitlines() if line.strip()]
+    if not values:
+        raise AssertionError(
+            f"Hammerspoon process {pid} disappeared while sampling RSS"
+        )
+    return int(values[0])
+
+
+def _write_memory_report(report: dict[str, object]) -> None:
+    """Write soak telemetry when the workflow provides an artifact path."""
+    report_path = os.getenv("HAMMERSPOON_MEMORY_REPORT")
+    if not report_path:
+        return
+    path = Path(report_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+
+
+async def test_hammerspoon_memory_regression(hammerspoon_client: MacAPI) -> None:
+    """Exercise real RPC/watchers repeatedly and enforce a bounded RSS budget."""
+    iterations = int(os.getenv("HAMMERSPOON_MEMORY_ITERATIONS", "80"))
+    peak_budget_kib = int(os.getenv("HAMMERSPOON_MEMORY_PEAK_BUDGET_MIB", "96")) * 1024
+    tail_budget_kib = int(os.getenv("HAMMERSPOON_MEMORY_TAIL_BUDGET_MIB", "48")) * 1024
+    pid = _hammerspoon_pid()
+    samples: list[dict[str, int]] = []
+    report: dict[str, object] = {
+        "pid": pid,
+        "iterations": iterations,
+        "peak_budget_kib": peak_budget_kib,
+        "tail_budget_kib": tail_budget_kib,
+        "samples": samples,
+    }
+
+    async def drain_events() -> None:
+        async for _ in hammerspoon_client.events:
+            pass
+
+    event_consumer = asyncio.create_task(drain_events())
+    try:
+        await hammerspoon_client.events.subscribe(["window.*", "screen.*", "audio.*"])
+        # Warm up lazy Hammerspoon/Screen Recording allocations before choosing
+        # the baseline. Samples below are the steady-state comparison window.
+        for iteration in range(iterations + 5):
+            await hammerspoon_client.system.info()
+            await hammerspoon_client.system.status()
+            await hammerspoon_client.apps.list()
+            await hammerspoon_client.windows.list()
+            focused = await hammerspoon_client.windows.focused()
+            if focused is not None:
+                await hammerspoon_client.windows.set_frame(focused.id, focused.frame)
+            screens = await hammerspoon_client.screens.list()
+            if screens and iteration % 4 == 0:
+                await hammerspoon_client.screens.screenshot(
+                    screens[0].id, mode="inline"
+                )
+            audio = await hammerspoon_client.audio.get()
+            if (
+                audio.output is not None
+                and audio.output.volume is not None
+                and iteration % 10 == 0
+            ):
+                await hammerspoon_client.audio.set_volume(audio.output.volume)
+            await hammerspoon_client.clipboard.get()
+            await hammerspoon_client.network.get()
+            await hammerspoon_client.system.user_activity()
+            await asyncio.sleep(0.1)
+            if iteration >= 5:
+                samples.append(
+                    {"iteration": iteration - 5, "rss_kib": _hammerspoon_rss_kib(pid)}
+                )
+    finally:
+        event_consumer.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await event_consumer
+        with contextlib.suppress(Exception):
+            await hammerspoon_client.events.unsubscribe_all()
+        if samples:
+            window = max(5, min(10, len(samples) // 4))
+            initial = int(
+                statistics.median(sample["rss_kib"] for sample in samples[:window])
+            )
+            final = int(
+                statistics.median(sample["rss_kib"] for sample in samples[-window:])
+            )
+            peak = max(sample["rss_kib"] for sample in samples)
+            report.update(
+                {
+                    "initial_median_kib": initial,
+                    "final_median_kib": final,
+                    "peak_kib": peak,
+                    "tail_growth_kib": final - initial,
+                    "peak_growth_kib": peak - initial,
+                    "sample_window": window,
+                }
+            )
+        _write_memory_report(report)
+
+    assert samples, "Hammerspoon memory soak did not produce any RSS samples"
+    initial = int(report["initial_median_kib"])
+    final = int(report["final_median_kib"])
+    peak = int(report["peak_kib"])
+    assert peak - initial <= peak_budget_kib, report
+    assert final - initial <= tail_budget_kib, report
 
 
 async def test_hammerspoon_event_iterator_closes_with_client(

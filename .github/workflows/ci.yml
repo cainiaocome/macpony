@@ -75,6 +75,7 @@ jobs:
           unset MACAPI_ENABLE_DANGEROUS_ACTIONS
           nohup /Applications/Hammerspoon.app/Contents/MacOS/Hammerspoon \
             >/tmp/hammerspoon-open.log 2>&1 </dev/null &
+          echo "HAMMERSPOON_PID=$!" >> "$GITHUB_ENV"
           socket_path="$HOME/Library/Application Support/HammerspoonMacAPI/run/macapi.sock"
           for attempt in $(seq 1 30); do
             if [ -S "$socket_path" ]; then exit 0; fi
@@ -84,10 +85,46 @@ jobs:
           cat /tmp/hammerspoon-open.log 2>/dev/null || true
           find "$HOME/Library/Logs" -maxdepth 3 -type f -iname '*hammerspoon*' -print -exec tail -100 {} \; 2>/dev/null || true
           exit 1
+      - name: Start independent Hammerspoon RSS sampler
+        run: |
+          sampler_path="$RUNNER_TEMP/hammerspoon-rss.tsv"
+          (
+            echo -e "timestamp\trss_kib"
+            while kill -0 "$HAMMERSPOON_PID" 2>/dev/null; do
+              rss=$(ps -o rss= -p "$HAMMERSPOON_PID" | tr -d ' ')
+              if [ -n "$rss" ]; then
+                printf '%s\t%s\n' "$(date +%s)" "$rss"
+              fi
+              sleep 1
+            done
+          ) > "$sampler_path" 2>&1 &
+          echo "HAMMERSPOON_SAMPLER_PID=$!" >> "$GITHUB_ENV"
       - name: Real Hammerspoon end-to-end test suite
         env:
           RUN_HAMMERSPOON_INTEGRATION: '1'
+          HAMMERSPOON_MEMORY_ITERATIONS: '80'
+          HAMMERSPOON_MEMORY_REPORT: ${{ runner.temp }}/hammerspoon-memory.json
         run: pytest -vv tests/integration -m hammerspoon
+      - name: Collect Hammerspoon memory diagnostics
+        if: failure()
+        run: |
+          ps -o pid,ppid,rss,vsz,etime,command -p "$HAMMERSPOON_PID" || true
+          vmmap -summary "$HAMMERSPOON_PID" > "$RUNNER_TEMP/hammerspoon-vmmap-summary.txt" 2>&1 || true
+          sample "$HAMMERSPOON_PID" 5 1 -file "$RUNNER_TEMP/hammerspoon-sample.txt" || true
+      - name: Stop independent Hammerspoon RSS sampler
+        if: always()
+        run: kill "${HAMMERSPOON_SAMPLER_PID:-}" 2>/dev/null || true
+      - name: Upload Hammerspoon memory artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hammerspoon-memory-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/hammerspoon-memory.json
+            ${{ runner.temp }}/hammerspoon-rss.tsv
+            ${{ runner.temp }}/hammerspoon-vmmap-summary.txt
+            ${{ runner.temp }}/hammerspoon-sample.txt
+          if-no-files-found: ignore
       - name: Hammerspoon logs
         if: failure()
         run: |

@@ -21,6 +21,15 @@ the socket server and the observation watchers.
   assigns sequence numbers, bounds the server queue, and asks the server to
   flush messages.
 
+The watcher and transport lifecycles are intentionally bounded. Window event
+observation is limited to the current Mission Control space; stale frame
+snapshots are periodically pruned. Audio callbacks are shared and explicitly
+released on device changes and shutdown. The socket read loop uses generation
+tags so reconnects cannot queue duplicate reads, and a client disconnect clears
+client-specific event subscriptions, timers, and queued events. See
+[`memory-and-leak-prevention.md`](memory-and-leak-prevention.md) for the
+regression budgets and hosted macOS memory probe.
+
 ### Python side
 
 `MacAPI` is the public façade. It owns namespace clients and delegates all
