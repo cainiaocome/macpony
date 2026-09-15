@@ -15,6 +15,7 @@ local eventbus = require("macapi.eventbus")
 local M = {}
 local listener
 local accept_timer
+local gc_timer
 local pending_read_tag
 local next_read_tag = 0
 local connection_count = 0
@@ -167,6 +168,7 @@ function M.start()
     chmod(config.socket_path, "600")
     eventbus.init(send)
     accept_timer = timer.doEvery(config.connection_poll_interval, poll_connections)
+    gc_timer = timer.doEvery(config.lua_gc_interval, function() collectgarbage("collect") end)
     read_next()
     return listener
 end
@@ -176,6 +178,7 @@ function M.stop()
     --- the socket created by this service.
     if not listener then return end
     if accept_timer then accept_timer:stop(); accept_timer = nil end
+    if gc_timer then gc_timer:stop(); gc_timer = nil end
     pending_read_tag = nil
     input_buffer = ""
     dropping_oversized_line = false

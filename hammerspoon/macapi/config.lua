@@ -21,6 +21,8 @@ M.max_queue_size = 256
 M.event_coalesce_ms = 75
 --- Polling is only needed to notice a newly accepted Unix-socket client.
 M.connection_poll_interval = 1.0
+--- Periodically reclaim temporary Lua tables created by RPC serialization.
+M.lua_gc_interval = 5.0
 --- Safety-net interval for stale window frame metadata.
 M.window_frame_prune_interval = 300
 -- The full API is enabled by default. Set MACAPI_ENABLE_DANGEROUS_ACTIONS=0
