@@ -106,7 +106,7 @@ jobs:
           HAMMERSPOON_MEMORY_REPORT: ${{ runner.temp }}/hammerspoon-memory.json
         run: pytest -vv tests/integration -m hammerspoon
       - name: Collect Hammerspoon memory diagnostics
-        if: failure()
+        if: always()
         run: |
           ps -o pid,ppid,rss,vsz,etime,command -p "$HAMMERSPOON_PID" || true
           vmmap -summary "$HAMMERSPOON_PID" > "$RUNNER_TEMP/hammerspoon-vmmap-summary.txt" 2>&1 || true

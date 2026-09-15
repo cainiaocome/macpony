@@ -82,8 +82,9 @@ budget accounts for allocator variance between hosted macOS runners; the
 per-phase report and independent RSS series remain available for trend review.
 These are regression budgets, not a claim that a finite CI run proves the absence
 of every long-term Hammerspoon or macOS leak. On failure, the workflow collects
-`vmmap -summary`, a `sample` report, Hammerspoon logs, the per-phase JSON
-report, and the independent RSS series.
+`vmmap -summary` and a `sample` report are collected on every hosted soak;
+Hammerspoon logs are collected on failure. The artifact also contains the
+per-phase JSON report and independent RSS series.
 
 Run the real test locally on a GUI-enabled macOS host with:
 
