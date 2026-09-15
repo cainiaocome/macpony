@@ -51,13 +51,17 @@ on cancellation, timeout, or transport loss.
 ## macOS regression coverage
 
 The `hammerspoon` GitHub Actions job runs the normal real-environment suite and
-then repeatedly performs RPC activity through the actual Unix socket:
+then repeatedly performs RPC activity through the actual Unix socket. The
+memory soak uses separate phases so a residual trend can be attributed to a
+class of operation:
 
-- system, application, window, screen, audio, clipboard, network, and user
-  activity calls;
-- window frame operations and periodic inline screenshots;
-- repeated event subscription and delivery; and
-- repeated audio control calls when a default output device is available.
+- `rpc`: system, application, window, audio, clipboard, network, and user
+  activity calls, including repeated audio control calls when a default output
+  device is available;
+- `screenshots`: repeated screen enumeration and inline screenshots; and
+- `windows`: repeated window enumeration, focus lookup, and frame operations.
+
+Each phase also delivers subscribed events through the Python client.
 
 The test samples the Hammerspoon process RSS after each activity cycle. It
 compares the median of the first and last sample windows and fails if either
@@ -65,11 +69,12 @@ the peak or the sustained tail exceeds the configured budget. The workflow
 also runs an independent one-second `ps` sampler, so the artifact still shows
 the process trend if the test itself fails.
 
-The default hosted settings are 80 cycles, a 96 MiB peak-growth budget, and a
-48 MiB sustained-tail budget. These are regression budgets, not a claim that a
-finite CI run proves the absence of every long-term Hammerspoon or macOS
-leak. On failure, the workflow collects `vmmap -summary`, a `sample` report,
-Hammerspoon logs, the per-cycle JSON report, and the independent RSS series.
+The default hosted settings are 80 cycles per phase (240 cycles total), a
+96 MiB peak-growth budget, and a 48 MiB sustained-tail budget. These are
+regression budgets, not a claim that a finite CI run proves the absence of
+every long-term Hammerspoon or macOS leak. On failure, the workflow collects
+`vmmap -summary`, a `sample` report, Hammerspoon logs, the per-phase JSON
+report, and the independent RSS series.
 
 Run the real test locally on a GUI-enabled macOS host with:
 

@@ -272,56 +272,89 @@ def _write_memory_report(report: dict[str, object]) -> None:
 
 
 async def test_hammerspoon_memory_regression(hammerspoon_client: MacAPI) -> None:
-    """Exercise real RPC/watchers repeatedly and enforce a bounded RSS budget."""
+    """Exercise real RPC/watchers in phases and enforce a bounded RSS budget."""
     iterations = int(os.getenv("HAMMERSPOON_MEMORY_ITERATIONS", "80"))
     peak_budget_kib = int(os.getenv("HAMMERSPOON_MEMORY_PEAK_BUDGET_MIB", "96")) * 1024
     tail_budget_kib = int(os.getenv("HAMMERSPOON_MEMORY_TAIL_BUDGET_MIB", "48")) * 1024
     pid = _hammerspoon_pid()
-    samples: list[dict[str, int]] = []
+    phase_samples: dict[str, list[dict[str, int]]] = {
+        "rpc": [],
+        "screenshots": [],
+        "windows": [],
+    }
     report: dict[str, object] = {
         "pid": pid,
         "iterations": iterations,
         "peak_budget_kib": peak_budget_kib,
         "tail_budget_kib": tail_budget_kib,
-        "samples": samples,
+        "phase_samples": phase_samples,
     }
 
     async def drain_events() -> None:
         async for _ in hammerspoon_client.events:
             pass
 
+    async def rpc_activity() -> None:
+        await hammerspoon_client.system.info()
+        await hammerspoon_client.system.status()
+        await hammerspoon_client.apps.list()
+        await hammerspoon_client.windows.list()
+        audio = await hammerspoon_client.audio.get()
+        if audio.output is not None and audio.output.volume is not None:
+            await hammerspoon_client.audio.set_volume(audio.output.volume)
+        await hammerspoon_client.clipboard.get()
+        await hammerspoon_client.network.get()
+        await hammerspoon_client.system.user_activity()
+
+    async def screenshot_activity() -> None:
+        screens = await hammerspoon_client.screens.list()
+        if screens:
+            await hammerspoon_client.screens.screenshot(screens[0].id, mode="inline")
+
+    async def window_activity() -> None:
+        await hammerspoon_client.windows.list()
+        focused = await hammerspoon_client.windows.focused()
+        if focused is not None:
+            await hammerspoon_client.windows.set_frame(focused.id, focused.frame)
+
+    def summarize(samples: list[dict[str, int]]) -> dict[str, int]:
+        if not samples:
+            return {}
+        window = max(5, min(10, len(samples) // 4))
+        initial = int(
+            statistics.median(sample["rss_kib"] for sample in samples[:window])
+        )
+        final = int(
+            statistics.median(sample["rss_kib"] for sample in samples[-window:])
+        )
+        peak = max(sample["rss_kib"] for sample in samples)
+        return {
+            "initial_median_kib": initial,
+            "final_median_kib": final,
+            "peak_kib": peak,
+            "tail_growth_kib": final - initial,
+            "peak_growth_kib": peak - initial,
+            "sample_window": window,
+        }
+
     event_consumer = asyncio.create_task(drain_events())
     try:
         await hammerspoon_client.events.subscribe(["window.*", "screen.*", "audio.*"])
         # Warm up lazy Hammerspoon/Screen Recording allocations before choosing
         # the baseline. Samples below are the steady-state comparison window.
-        for iteration in range(iterations + 5):
-            await hammerspoon_client.system.info()
-            await hammerspoon_client.system.status()
-            await hammerspoon_client.apps.list()
-            await hammerspoon_client.windows.list()
-            focused = await hammerspoon_client.windows.focused()
-            if focused is not None:
-                await hammerspoon_client.windows.set_frame(focused.id, focused.frame)
-            screens = await hammerspoon_client.screens.list()
-            if screens and iteration % 4 == 0:
-                await hammerspoon_client.screens.screenshot(
-                    screens[0].id, mode="inline"
-                )
-            audio = await hammerspoon_client.audio.get()
-            if (
-                audio.output is not None
-                and audio.output.volume is not None
-                and iteration % 10 == 0
-            ):
-                await hammerspoon_client.audio.set_volume(audio.output.volume)
-            await hammerspoon_client.clipboard.get()
-            await hammerspoon_client.network.get()
-            await hammerspoon_client.system.user_activity()
+        for _ in range(5):
+            await rpc_activity()
             await asyncio.sleep(0.1)
-            if iteration >= 5:
-                samples.append(
-                    {"iteration": iteration - 5, "rss_kib": _hammerspoon_rss_kib(pid)}
+        for phase, activity in (
+            ("rpc", rpc_activity),
+            ("screenshots", screenshot_activity),
+            ("windows", window_activity),
+        ):
+            for iteration in range(iterations):
+                await activity()
+                await asyncio.sleep(0.1)
+                phase_samples[phase].append(
+                    {"iteration": iteration, "rss_kib": _hammerspoon_rss_kib(pid)}
                 )
     finally:
         event_consumer.cancel()
@@ -329,31 +362,22 @@ async def test_hammerspoon_memory_regression(hammerspoon_client: MacAPI) -> None
             await event_consumer
         with contextlib.suppress(Exception):
             await hammerspoon_client.events.unsubscribe_all()
-        if samples:
-            window = max(5, min(10, len(samples) // 4))
-            initial = int(
-                statistics.median(sample["rss_kib"] for sample in samples[:window])
-            )
-            final = int(
-                statistics.median(sample["rss_kib"] for sample in samples[-window:])
-            )
-            peak = max(sample["rss_kib"] for sample in samples)
-            report.update(
-                {
-                    "initial_median_kib": initial,
-                    "final_median_kib": final,
-                    "peak_kib": peak,
-                    "tail_growth_kib": final - initial,
-                    "peak_growth_kib": peak - initial,
-                    "sample_window": window,
-                }
-            )
+        phase_summaries = {
+            phase: summarize(samples) for phase, samples in phase_samples.items()
+        }
+        all_samples = [
+            sample for samples in phase_samples.values() for sample in samples
+        ]
+        overall = summarize(all_samples)
+        report.update({"phases": phase_summaries, "overall": overall})
         _write_memory_report(report)
 
-    assert samples, "Hammerspoon memory soak did not produce any RSS samples"
-    initial = int(report["initial_median_kib"])
-    final = int(report["final_median_kib"])
-    peak = int(report["peak_kib"])
+    all_samples = [sample for samples in phase_samples.values() for sample in samples]
+    assert all_samples, "Hammerspoon memory soak did not produce any RSS samples"
+    overall = summarize(all_samples)
+    initial = overall["initial_median_kib"]
+    final = overall["final_median_kib"]
+    peak = overall["peak_kib"]
     assert peak - initial <= peak_budget_kib, report
     assert final - initial <= tail_budget_kib, report
 

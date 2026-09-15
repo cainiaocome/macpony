@@ -63,11 +63,12 @@ watcher event, and verifies client shutdown behavior. It leaves irreversible
 screen-lock, screensaver, app-quit, and input-injection actions out of the
 always-on job.
 
-The same job runs an 80-cycle memory regression soak. It exercises the RPC and
-event paths while sampling Hammerspoon RSS, and uploads the JSON report plus an
-independent one-second RSS series. A failed soak additionally captures
-`vmmap -summary`, a process sample, and Hammerspoon logs. Details and local
-commands are in [`memory-and-leak-prevention.md`](memory-and-leak-prevention.md).
+The same job runs an 80-cycle-per-phase memory regression soak. It separately
+exercises RPC, screenshot, and window activity while sampling Hammerspoon RSS,
+and uploads the per-phase JSON report plus an independent one-second RSS
+series. A failed soak additionally captures `vmmap -summary`, a process sample,
+and Hammerspoon logs. Details and local commands are in
+[`memory-and-leak-prevention.md`](memory-and-leak-prevention.md).
 
 ## Troubleshooting
 
