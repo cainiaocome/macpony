@@ -44,12 +44,11 @@ the memory work below is the active milestone.
 
 ## In progress
 
-- Validate the surviving-client recovery fix locally and in the hosted macOS
-  Hammerspoon job.
+- None.
 
 ## Remaining
 
-- None after the recovery regression is verified in GitHub Actions.
+- None.
 
 ## Constraints and decisions
 
@@ -66,14 +65,15 @@ the memory work below is the active milestone.
 - `pytest tests/python`: passed (23 tests).
 - Documentation and source-comment changes do not alter runtime behavior; no generated documentation artifacts are required.
 - The expanded Hammerspoon integration suite requires macOS, Hammerspoon, a GUI session, and `RUN_HAMMERSPOON_INTEGRATION=1`.
-- Local Linux result: `pytest tests/integration` skips all 6 Hammerspoon tests as expected.
+- Local Linux result: `pytest tests/integration` skips all 8 Hammerspoon tests as expected.
 - Hosted verification: CI run `34977115148` passed all jobs, including the
   macOS Hammerspoon suite and 480-cycle memory soak at commit `f595a7d`.
+- Hosted recovery verification: CI run `35599810964` passed all jobs, including
+  the replacement-client regression in the real macOS Hammerspoon suite.
 - Final hosted telemetry: each phase stayed within the 128 MiB peak / 96 MiB
   tail budget. Cumulative RSS rose by about 152 MiB, while `vmmap` reported a
   74.1 MiB physical footprint (94.6 MiB peak) dominated by macOS malloc zones,
   not CoreGraphics/ImageIO. Treat this as allocator/cache variance to monitor,
   not proof of an unbounded live Lua/event leak.
 - GitHub workflow YAML parses locally and the complete hosted matrix passed in run `34853070893`.
-- `origin/master` includes the verified implementation through the final
-  workflow-published changes.
+- `origin/master` includes the verified implementation through commit `cc1bab2`.
