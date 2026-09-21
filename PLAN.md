@@ -2,8 +2,9 @@
 
 ## Goal
 
-Fix the diagnosed Hammerspoon/Lua memory-growth paths, add regression coverage
-including a real macOS RSS soak test, and verify the result in GitHub Actions.
+Fix the diagnosed Hammerspoon/Lua memory-growth paths and the single-client
+read-loop recovery bug, add regression coverage including a real macOS RSS
+soak test, and verify the result in GitHub Actions.
 
 The original Unix-domain-socket NDJSON protocol, Hammerspoon server, typed
 async Python SDK, tests, documentation, and CI implementation are complete;
@@ -37,15 +38,18 @@ the memory work below is the active milestone.
 - Added a 480-cycle hosted macOS memory soak split into RPC, audio, screenshot,
   and window phases, with per-phase RSS budgets, JSON/RSS artifacts, and
   unconditional `vmmap`/`sample` diagnostics.
+- Made the Lua server invalidate stale reads across connection-count changes
+  and re-arm the read loop when one surviving client remains; added a real
+  overlapping-client macOS regression test.
 
 ## In progress
 
-- None.
+- Validate the surviving-client recovery fix locally and in the hosted macOS
+  Hammerspoon job.
 
 ## Remaining
 
-- None for this milestone. Continue reviewing uploaded RSS/vmmap artifacts if
-  a future Hammerspoon version changes allocator behavior.
+- None after the recovery regression is verified in GitHub Actions.
 
 ## Constraints and decisions
 

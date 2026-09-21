@@ -402,6 +402,38 @@ async def test_hammerspoon_event_iterator_closes_with_client(
         await pending_event
 
 
+async def test_hammerspoon_surviving_client_recovers_after_extra_client_closes(
+    hammerspoon_client: MacAPI,
+) -> None:
+    """Verify a 1->2->1 transition re-arms the real Lua read loop."""
+    await hammerspoon_client.close()
+    first = MacAPI(auto_reconnect=False)
+    second = MacAPI(auto_reconnect=False)
+    second_connect: asyncio.Task[None] | None = None
+    try:
+        await first.connect()
+        second_connect = asyncio.create_task(second.connect())
+        # Replace the first client before the one-second poll necessarily sees
+        # a connection-count transition. The second handshake must recover via
+        # the server's bounded read watchdog.
+        await asyncio.sleep(0.1)
+        await first.close()
+        await asyncio.wait_for(second_connect, 5)
+        assert second.connected
+        result = cast(
+            dict[str, object],
+            await second.call("protocol.ping", result_type=dict[str, object]),
+        )
+        assert result["pong"] is True
+    finally:
+        if second_connect is not None and not second_connect.done():
+            second_connect.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await second_connect
+        await first.close()
+        await second.close()
+
+
 async def test_hammerspoon_missing_socket_reports_sdk_error(tmp_path: Path) -> None:
     """Keep initial connection failures typed even in the real macOS job."""
     client = MacAPI(tmp_path / "macapi-no-such-socket", auto_reconnect=False)

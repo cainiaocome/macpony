@@ -21,6 +21,8 @@ M.max_queue_size = 256
 M.event_coalesce_ms = 75
 --- Polling is only needed to notice a newly accepted Unix-socket client.
 M.connection_poll_interval = 1.0
+--- Recover when a client is replaced before polling observes a count change.
+M.connection_read_recovery_interval = 2.0
 --- Periodically reclaim temporary Lua tables created by RPC serialization.
 M.lua_gc_interval = 5.0
 --- Safety-net interval for stale window frame metadata.

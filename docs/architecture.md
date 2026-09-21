@@ -30,6 +30,13 @@ client-specific event subscriptions, timers, and queued events. See
 [`memory-and-leak-prevention.md`](memory-and-leak-prevention.md) for the
 regression budgets and hosted macOS memory probe.
 
+If an extra client overlaps the active client, the server invalidates the
+outstanding read on each connection-count transition. When the count returns
+to one, it starts a fresh read for the surviving client, so a stale read from
+the departed client cannot wedge the handshake loop. If the old client is
+replaced between polls and the count remains one, a bounded recovery read
+performs the same handoff without accumulating reads indefinitely.
+
 ### Python side
 
 `MacAPI` is the public façade. It owns namespace clients and delegates all

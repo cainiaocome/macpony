@@ -16,7 +16,9 @@ local M = {}
 local listener
 local accept_timer
 local gc_timer
-local pending_read_tag
+local pending_read_tags = {}
+local recovery_read_tag
+local pending_read_started_at
 local next_read_tag = 0
 local connection_count = 0
 local input_buffer = ""
@@ -68,26 +70,46 @@ local function respond(id, ok, result, code, message)
     else send(protocol.failure(id, code, message)) end
 end
 
-local function read_next()
+local function read_next(recovery)
     -- Read exactly one byte so the server can enforce the record bound before
     -- a delimiter read allocates an unbounded buffer.
-    if not listener or pending_read_tag then return end
+    if not listener then return end
+    if recovery then
+        if recovery_read_tag then return end
+    elseif next(pending_read_tags) then
+        return
+    end
     local connections = listener:connections()
     if connections ~= 1 then return end
     next_read_tag = next_read_tag + 1
     local read_tag = next_read_tag
-    pending_read_tag = read_tag
+    pending_read_tags[read_tag] = true
+    if not pending_read_started_at then
+        pending_read_started_at = timer.secondsSinceEpoch()
+    end
+    if recovery then recovery_read_tag = read_tag end
     local ok, result = pcall(function() return listener:read(1, read_tag) end)
-    if (not ok or not result) and pending_read_tag == read_tag then
-        pending_read_tag = nil
+    if not ok or not result then
+        pending_read_tags[read_tag] = nil
+        if recovery_read_tag == read_tag then recovery_read_tag = nil end
+        if not next(pending_read_tags) then pending_read_started_at = nil end
     end
 end
 
 local function callback(data, tag)
     -- Append bytes, discard oversized records through their newline, and
     -- dispatch only complete request objects.
-    if pending_read_tag ~= tag then return end
-    pending_read_tag = nil
+    if not pending_read_tags[tag] then return end
+    pending_read_tags[tag] = nil
+    local recovery = recovery_read_tag == tag
+    if recovery then
+        -- A recovery read was started because the previous read may belong to
+        -- a departed client. Its callback proves that the current client can
+        -- be read; late callbacks from the old read must be ignored.
+        recovery_read_tag = nil
+        pending_read_tags = {}
+    end
+    if not next(pending_read_tags) then pending_read_started_at = nil end
     if not listener then return end
     if listener:connections() ~= 1 then
         -- hs.socket exposes the listening socket and accepted clients as one
@@ -133,15 +155,27 @@ local function poll_connections()
     local connections = listener:connections()
     if connections == connection_count then
         read_next()
+        if connections == 1
+            and pending_read_started_at
+            and not recovery_read_tag
+            and timer.secondsSinceEpoch() - pending_read_started_at
+                >= config.connection_read_recovery_interval then
+            read_next(true)
+        end
         return
     end
     connection_count = connections
+    -- A read belongs to the set of clients that existed when hs.socket:read
+    -- was called. Invalidate it on every set-size transition so a late
+    -- callback from a departed client cannot block the surviving client.
+    pending_read_tags = {}
+    recovery_read_tag = nil
+    pending_read_started_at = nil
+    input_buffer = ""
+    dropping_oversized_line = false
     if connections == 0 then
         -- A disconnected client's outstanding read is no longer useful. The
         -- generation tag prevents a late callback from affecting a new one.
-        pending_read_tag = nil
-        input_buffer = ""
-        dropping_oversized_line = false
         eventbus.client_disconnected()
     elseif connections == 1 then
         read_next()
@@ -162,7 +196,9 @@ function M.start()
     end
     input_buffer = ""
     dropping_oversized_line = false
-    pending_read_tag = nil
+    pending_read_tags = {}
+    recovery_read_tag = nil
+    pending_read_started_at = nil
     next_read_tag = 0
     connection_count = 0
     chmod(config.socket_path, "600")
@@ -179,7 +215,9 @@ function M.stop()
     if not listener then return end
     if accept_timer then accept_timer:stop(); accept_timer = nil end
     if gc_timer then gc_timer:stop(); gc_timer = nil end
-    pending_read_tag = nil
+    pending_read_tags = {}
+    recovery_read_tag = nil
+    pending_read_started_at = nil
     input_buffer = ""
     dropping_oversized_line = false
     connection_count = 0

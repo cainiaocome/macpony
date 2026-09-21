@@ -110,4 +110,6 @@ NDJSON record limit and is intended for small captures.
 
 Version 1 is intentionally single-client. Close other clients before starting
 a new one. The server avoids broadcasting responses while more than one client
-is attached.
+is attached, and recovers its read loop when the extra client closes. A second
+client should therefore be short-lived only as a transition; normal operation
+should still use one long-lived `MacAPI` instance.
